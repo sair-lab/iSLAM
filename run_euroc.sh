@@ -3,10 +3,10 @@ conda activate impe-learning
 
 data_dir=DATA_DIR
 
-loss_weight='(3,0.1,1,0.1)'
+loss_weight='(4,0.1,2,0.1)'
 rot_w=1
 trans_w=0.1
-lr=1e-6
+lr=3e-6
 epoch=7
 train_portion=1
 
