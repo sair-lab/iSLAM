@@ -12,7 +12,6 @@ wandb/
 *.pyc
 *.zip
 *.out
-*.png
 *.npy
 *.html
 *.ipynb
