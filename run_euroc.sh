@@ -1,7 +1,7 @@
 source ~/.bashrc
 conda activate impe-learning
 
-data_dir=DATA_DIR
+data_dir=/projects/academic/cwx/euroc/MH_01_easy/mav0
 
 loss_weight='(4,0.1,2,0.1)'
 rot_w=1
@@ -23,6 +23,7 @@ train_name=${rot_w}Ra_${trans_w}ta_delayOptm_lr=${lr}_${loss_weight}_${exp_type}
 echo -e "\n=============================================="
 echo "project name = ${project_name}"
 echo "train name = ${train_name}"
+echo "data dir = ${data_dir}"
 echo "=============================================="
 
 rm -r train_results/${project_name}/${train_name}
@@ -31,7 +32,7 @@ rm -r train_results_models/${project_name}/${train_name}
 mkdir -p train_results_models/${project_name}/${train_name}
 
 if [ "$use_scale" = true ]; then
-    # mono
+    # mono: use gt scale
     python train.py \
         --result-dir train_results/${project_name}/${train_name} \
         --save-model-dir train_results_models/${project_name}/${train_name} \
@@ -48,18 +49,14 @@ if [ "$use_scale" = true ]; then
         --snapshot-interval 1 \
         --lr ${lr} \
         --loss-weight ${loss_weight} \
-        --mode train-all \
-        --use-stereo 1 \
         --data-type euroc \
         --fix-model-parts 'flow' 'stereo' \
-        --use-pvgo \
         --rot-w ${rot_w} \
         --trans-w ${trans_w} \
-        --delay-optm \
         --train-portion ${train_portion} \
         --use-gt-scale
 else
-    # stereo not use scale
+    # stereo: calc scale
     python train.py \
         --result-dir train_results/${project_name}/${train_name} \
         --save-model-dir train_results_models/${project_name}/${train_name} \
@@ -76,13 +73,9 @@ else
         --snapshot-interval 1 \
         --lr ${lr} \
         --loss-weight ${loss_weight} \
-        --mode train-all \
-        --use-stereo 1 \
         --data-type euroc \
         --fix-model-parts 'flow' 'stereo' \
-        --use-pvgo \
         --rot-w ${rot_w} \
         --trans-w ${trans_w} \
-        --delay-optm \
         --train-portion ${train_portion}
 fi

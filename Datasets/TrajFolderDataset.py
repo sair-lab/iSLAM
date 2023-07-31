@@ -6,16 +6,13 @@ import cv2
 
 import torch
 from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.distributed import DistributedSampler
 
 from os import listdir, path
 from os.path import isdir, isfile
-from torch.utils.data.distributed import DistributedSampler
 
 from .transformation import pos_quats2SEs, pose2motion, SEs2ses
 from .utils import make_intrinsics_layer
-from .loopDetector import gt_pose_loop_detector, bow_orb_loop_detector, adj_loop_detector
-from .stopDetector import gt_vel_stop_detector
-from .loopDetector import multicam_frame_selector
 
 
 def sync_data(ts_src, ts_tar):
@@ -25,9 +22,9 @@ def sync_data(ts_src, ts_tar):
         while j+1 < len(ts_src) and abs(ts_src[j+1]-t) <= abs(ts_src[j]-t):
             j += 1
         res.append(j)
-    for i in range(len(res)-1):
-        if res[i+1] - res[i] <= 0:
-            print('sync_data error', i, ts_tar[i:i+2], ts_src[max(0,res[i]-5):min(len(ts_src), res[i]+5)])
+    # for i in range(len(res)-1):
+    #     if res[i+1] - res[i] <= 0:
+    #         print('sync_data error', i, ts_tar[i:i+2], ts_src[max(0,res[i]-5):min(len(ts_src), res[i]+5)])
     return np.array(res)
 
 
@@ -51,8 +48,6 @@ def stereo_rectify(left_intrinsic, left_distortion, right_intrinsic, right_disto
     R = right2left_pose.Inv().rotation().matrix().numpy().astype(np.float64)
     T = right2left_pose.Inv().translation().numpy().astype(np.float64)
 
-    # print(R, R.dtype, T, T.dtype)
-
     R1, R2, P1, P2, Q, roi1, roi2 = cv2.stereoRectify(
         left_K, left_distortion, right_K, right_distortion,
         (width, height), R, T, alpha=0
@@ -64,8 +59,6 @@ def stereo_rectify(left_intrinsic, left_distortion, right_intrinsic, right_disto
     left_intrinsic_new = matrix2intrinsic(P1)
     right_intrinsic_new = matrix2intrinsic(P2)
     right2left_pose_new = pp.SE3([-P2[0,3]/P2[0,0],0,0, 0,0,0,1]).to(torch.float32)
-
-    # print(right2left_pose, right2left_pose_new)
 
     return left_intrinsic_new, right_intrinsic_new, right2left_pose_new, left_map, right_map
 
@@ -568,234 +561,3 @@ class TrajFolderDatasetPVGO(TrajFolderDataset):
         res['datatype'] = self.datatype
 
         return res
-
-
-class TrajFolderDatasetMultiCam(TrajFolderDataset):
-    def __init__(self, datadir, datatype, transform=None, start_frame=0, end_frame=-1):
-
-        super(TrajFolderDatasetMultiCam, self).__init__(datadir, datatype, transform, start_frame, end_frame)
-
-        ############################## generate links ######################################################################
-        angle_range = (0, 5)
-        trans_range = (0.1, 0.5)
-        
-        # debug
-        # angle_range = (0, 0.01)
-        # trans_range = (0.0, 0.05)
-        self.links = multicam_frame_selector(self.poses, trans_range, angle_range)
-
-        self.num_link = len(self.links)
-
-        ############################## calc extrinsics & motions ######################################################################
-        self.motions = self.calc_motions_by_links(self.links[:, (0,2)])
-        self.extrinsics = self.calc_motions_by_links(self.links[:, (0,1)])
-
-    def __getitem__(self, idx):
-        res = {}
-
-        imgA = cv2.imread(self.rgbfiles[self.links[idx][0]], cv2.IMREAD_COLOR)
-        imgB = cv2.imread(self.rgbfiles[self.links[idx][1]], cv2.IMREAD_COLOR)
-        imgC = cv2.imread(self.rgbfiles[self.links[idx][2]], cv2.IMREAD_COLOR)
-        res['img0'] = [imgA]
-        res['img1'] = [imgC]
-        res['img0_r'] = [imgB]
-
-        res['path_img0'] = self.rgbfiles[self.links[idx][0]]
-        res['path_img1'] = self.rgbfiles[self.links[idx][2]]
-        res['path_img0_r'] = self.rgbfiles[self.links[idx][1]]
-
-        h, w, _ = imgA.shape
-        intrinsicLayer = make_intrinsics_layer(w, h, self.intrinsic[0], self.intrinsic[1], self.intrinsic[2], self.intrinsic[3])
-        res['intrinsic'] = [intrinsicLayer]
-
-        if self.transform:
-            res = self.transform(res)
-
-        if self.motions is not None:
-            res['motion'] = self.motions[idx]
-
-        if self.has_imu and self.imu_motions is not None:
-            res['imu_motion'] = self.imu_motions[idx]
-
-        if self.extrinsics is not None:
-            res['extrinsic'] = self.extrinsics[idx]
-        return res
-
-
-class MultiTrajFolderDataset(Dataset):
-    def __init__(self, DatasetType, datatype_root, transform=None, mode='train', debug=False):
-        self.datatype_root = datatype_root
-        self.mode = mode
-
-        folder_list = []
-        folder_list.extend(self.list_tartanair_folders())
-        folder_list.extend(self.list_kitti_folders())
-        folder_list.extend(self.list_euroc_folders())
-        folder_list.sort()
-        if debug:
-            folder_list = [folder_list[0]]
-
-        self.datasets = []
-        self.accmulatedDataSize = [0]
-
-        print('Loading dataset for {} dirs ...'.format(len(folder_list)))
-
-        from tqdm import tqdm
-        for folder, datatype in tqdm(folder_list):
-            if isinstance(DatasetType, list) or isinstance(DatasetType, tuple):
-                for DS in DatasetType:
-                    dataset = DS(datadir=folder, datatype=datatype, transform=transform)
-                    self.datasets.append(dataset)
-                    self.accmulatedDataSize.append(self.accmulatedDataSize[-1] + len(dataset))
-            else:
-                dataset = DatasetType(datadir=folder, datatype=datatype, transform=transform)
-                self.datasets.append(dataset)
-                self.accmulatedDataSize.append(self.accmulatedDataSize[-1] + len(dataset))
-
-        print('Find {} datasets. Have {} frames in total.'.format(len(self.datasets), self.accmulatedDataSize[-1]))
-
-    def list_tartanair_folders(self):
-        if 'tartanair' not in self.datatype_root:
-            return []
-        else:
-            dataroot = self.datatype_root['tartanair']
-
-        scenedirs = [
-            'abandonedfactory',    'abandonedfactory_night',   'amusement',        'carwelding',   'ocean',
-            'gascola',             'hospital',                 'japanesealley',    'neighborhood', 'seasonsforest',
-            'office',              'office2',                  'oldtown',          'seasidetown',  'seasonsforest_winter',
-            'soulcity',            'westerndesert',            'endofworld'
-        ]
-        level_set = ['Easy', 'Hard']
-
-        if self.mode == 'train':
-            print('\nLoading Training dataset')
-            scenedirs = scenedirs[0:16]
-        elif self.mode == 'test':
-            scenedirs = scenedirs[16:18]
-            print('\nLoading Testing dataset')
-                
-        res = []
-
-        for scene in scenedirs:
-            for level in level_set:
-                trajdirs = listdir('{}/{}/{}'.format(dataroot, scene, level))
-                trajdirs.sort()
-                for traj in trajdirs:
-                    if not (len(traj)==4 and traj.startswith('P0')):
-                        continue
-                    folder = '{}/{}/{}/{}'.format(dataroot, scene, level, traj)
-                    res.append([folder, 'tartanair'])
-                    # only load one traj per env level!
-                    break
-        
-        return res
-
-    def list_kitti_folders(self):
-        if 'kitti' not in self.datatype_root:
-            return []
-        else:
-            dataroot = self.datatype_root['kitti']
-
-        date_drive = {
-            '2011_09_30': [
-                '2011_09_30_drive_0016_sync',
-                '2011_09_30_drive_0018_sync',
-                '2011_09_30_drive_0020_sync',
-                '2011_09_30_drive_0027_sync',
-                '2011_09_30_drive_0028_sync',
-                '2011_09_30_drive_0033_sync',
-                '2011_09_30_drive_0034_sync'
-            ],
-            '2011_10_03': [
-                '2011_10_03_drive_0027_sync',
-                '2011_10_03_drive_0034_sync',
-                '2011_10_03_drive_0042_sync'
-            ]
-        }
-
-        if self.mode == 'train':
-            print('\nLoading Training dataset')
-        elif self.mode == 'test':
-            print('\nLoading Testing dataset')
-
-        res = []
-
-        for date, drive_list in date_drive.items():
-            for drive in drive_list:
-                folder = '{}/{}/{}'.format(dataroot, date, drive)
-                res.append([folder, 'kitti'])
-        
-        return res
-    
-    def list_euroc_folders(self):
-        if 'euroc' not in self.datatype_root:
-            return []
-        else:
-            dataroot = self.datatype_root['euroc']
-
-        trajs = [
-            'MH_01_easy', 'MH_02_easy', 'MH_03_medium', 'MH_04_difficult', 'MH_05_difficult',
-            'V1_01_easy', 'V1_02_medium', 'V1_03_difficult',
-            'V2_01_easy', 'V2_02_medium', 'V2_03_difficult'
-        ]
-
-        res = []
-
-        for traj in trajs:
-            folder = '{}/{}/mav0'.format(dataroot, traj)
-            res.append([folder, 'euroc'])
-        
-        return res
-
-    def __len__(self):
-        return self.accmulatedDataSize[-1]
-
-    def __getitem__(self, idx):
-        ds_idx = 0
-        while idx >= self.accmulatedDataSize[ds_idx]:
-            ds_idx += 1
-        ds_idx -= 1
-
-        return self.datasets[ds_idx][idx - self.accmulatedDataSize[ds_idx]]
-
-    # def list_all_frames(self):
-    #     all_frames = []
-    #     for ds in self.datasets:
-    #         rgb = np.array([fname.replace(self.dataroot, '') for fname in ds.rgbfiles])
-    #         all_frames.extend(rgb[ds.links].tolist())
-    #     return all_frames
-
-
-class LoopDataSampler:
-    def __init__(self, dataset, batch_size=4, shuffle=True, num_workers=4, distributed=True):
-        self.dataset = dataset
-        pin = False
-        if distributed:
-            self.dist_sampler = DistributedSampler(dataset, shuffle=shuffle)
-            self.dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, sampler=self.dist_sampler, pin_memory=pin)
-        else:
-            self.dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=pin)
-        self.dataiter = iter(self.dataloader)
-        self.epoch_cnt = 0
-        self.distributed = distributed
-
-        self.first_sample = self.next()
-    
-    def next(self):
-        try:
-            sample = next(self.dataiter)
-
-        except StopIteration:
-            self.epoch_cnt += 1
-            if self.distributed:
-                self.dist_sampler.set_epoch(self.epoch_cnt)
-
-            self.dataiter = iter(self.dataloader)
-            sample = next(self.dataiter)
-
-        return sample
-
-    def first(self):
-        return self.first_sample
-        
