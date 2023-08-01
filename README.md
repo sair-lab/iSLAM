@@ -13,7 +13,7 @@ This design significantly improves the generalization ability of the entire syst
 
 ## Related Papers
 
-**iSLAM: Imperative SLAM**, Taimeng Fu, Shaoshu Su, and Chen Wang. "" *arXiv preprint arXiv:2306.07894*, 2023. [PDF](https://arxiv.org/pdf/2306.07894.pdf).
+**iSLAM: Imperative SLAM**, Taimeng Fu, Shaoshu Su, and Chen Wang, *arXiv preprint arXiv:2306.07894*, 2023. [PDF](https://arxiv.org/pdf/2306.07894.pdf).
 
 Please cite us as:
 ```
@@ -37,9 +37,9 @@ The figure below visualizes the improvements VO trajectories through imperative 
 
 ## More Info
 
-Video: coming soon!
+Video: https://www.youtube.com/watch?v=rtCvx0XCRno
 
-Webpage: coming soon!
+Webpage: https://sairlab.org/iSLAM/
 
 ## Run Code
 
