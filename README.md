@@ -25,7 +25,7 @@ Please cite us as:
 }
 ```
 
-## Experinemnt Results
+## Experiment Results
 
 We test our framework on [KITTI](https://www.cvlibs.net/datasets/kitti/) and [EuRoC](https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets) benchmarks, which have distinctive motion patterns. It is seen that after 6 iterations, both the front-end and back-end improve themselves significantly. Note that this is a self-learning process and no ground truth labels are used.
 
@@ -43,7 +43,7 @@ Webpage: https://sairlab.org/iSLAM/
 
 ## Run Code
 
-### Create Conda Enviroment
+### Create Conda Environment
 
 Please use the `environment.yml` we provided.
 
