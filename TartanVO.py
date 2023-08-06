@@ -157,23 +157,25 @@ class TartanVO:
             ############################## calculate scale ######################################################################   
             scale = []
             mask = []
+            depth = []
             for i in range(pose.shape[0]):
                 fx, fy, cx, cy = intrinsic_calib[i] / 4
                 disp_th_dict = {'kitti':5, 'euroc':1}
-                r, s, m = scale_from_disp_flow(disp[i], flow[i], pose_ENU_SE3[i], fx, fy, cx, cy, baseline[i], 
+                s, z, m = scale_from_disp_flow(disp[i], flow[i], pose_ENU_SE3[i], fx, fy, cx, cy, baseline[i], 
                                                 mask=edge[i], disp_th=disp_th_dict[sample['datatype'][i]])
                 scale.append(s)
                 mask.append(m)
+                depth.append(z)
             scale = torch.stack(scale)
             mask = torch.stack(mask)
+            depth = torch.stack(depth)
             
             trans = torch.nn.functional.normalize(pose[:, :3], dim=1) * scale.view(-1, 1)
             pose = torch.cat([trans, pose[:, 3:]], dim=1)
 
-            res['scale'] = scale
             res['pose'] = pose
-            res['flow'] = flow
-            res['disp'] = disp
+            res['mask'] = mask
+            res['depth'] = depth
             
         else:
             ############################## recover scale from GT ######################################################################   

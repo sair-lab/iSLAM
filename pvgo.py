@@ -67,10 +67,23 @@ class PoseVelGraph(nn.Module):
 
     def vo_loss(self, edges, poses):
         nodes = self.nodes
-        vels = self.vels
 
         node1 = nodes[edges[:, 0]].detach()
         node2 = nodes[edges[:, 1]].detach()
+        error = poses.Inv() @ node1.Inv() @ node2
+        error = error.Log().tensor()
+
+        trans_loss = torch.sum(error[:, :3]**2, dim=1)
+        rot_loss = torch.sum(error[:, 3:]**2, dim=1)
+
+        return trans_loss, rot_loss
+
+
+    def vo_loss_unroll(self, edges, poses):
+        nodes = self.nodes
+
+        node1 = nodes[edges[:, 0]]
+        node2 = nodes[edges[:, 1]]
         error = poses.Inv() @ node1.Inv() @ node2
         error = error.Log().tensor()
 
@@ -114,6 +127,9 @@ def run_pvgo(poses_np, motions, links, imu_drots_np, imu_dtrans_np, imu_dvels_np
 
     # get loss for backpropagate
     trans_loss, rot_loss = graph.vo_loss(edges, data.poses_withgrad)
+
+    # for test
+    # trans_loss, rot_loss = graph.vo_loss_unroll(edges, data.poses_withgrad)
 
     # align nodes to the original first pose
     nodes, vels = graph.align_to(node0)

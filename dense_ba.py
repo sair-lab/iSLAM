@@ -47,6 +47,7 @@ def scale_from_disp_flow(disp, flow, motion, fx, fy, cx, cy, baseline, depth=Non
 
         # disp to depth
         z = torch.where(disp_mask, fx*baseline / disp, 0)
+        depth_mask = torch.logical_and(is_inside_image_1D(-disp + u, width), disp >= 1)
 
     else:
         # use depth input
@@ -96,9 +97,11 @@ def scale_from_disp_flow(disp, flow, motion, fx, fy, cx, cy, baseline, depth=Non
     T = pp.SE3(torch.cat([s * t, R.tensor()]))
 
     # perform reprojection and calculate residual
-    reproj = K.unsqueeze(0).unsqueeze(0) @ proj(T.Inv().unsqueeze(0).unsqueeze(0) @ P).unsqueeze(-1)
-    reproj = reproj.squeeze().permute(2, 0, 1)[:2, ...]
-    r = reproj - (flow + uv)
+    # reproj = K.unsqueeze(0).unsqueeze(0) @ proj(T.Inv().unsqueeze(0).unsqueeze(0) @ P).unsqueeze(-1)
+    # reproj = reproj.squeeze().permute(2, 0, 1)[:2, ...]
+    # r = reproj - (flow + uv)
+
+    # debug
 
     # z_gray = to_image(z.numpy()*10)
     # cv2.imwrite('z_gray.png', z_gray)
@@ -117,4 +120,7 @@ def scale_from_disp_flow(disp, flow, motion, fx, fy, cx, cy, baseline, depth=Non
     # reproj_flow_rgb = np.concatenate([reproj_flow.permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(reproj_flow.shape[1:]), axis=-1)], axis=-1)*0.5
     # cv2.imwrite('reproj_flow_rgb.png', reproj_flow_rgb)
 
-    return r, s, mask
+    # print(z.shape, z.device, mask.shape, mask.device)
+    # print(torch.min(z[mask]), torch.max(z[mask]))
+
+    return s, z.squeeze().cpu(), depth_mask.squeeze().cpu()

@@ -3,6 +3,7 @@ from Datasets.transformation import tartan2kitti_pypose, motion2pose_pypose, cvt
 from Datasets.TrajFolderDataset import TrajFolderDatasetPVGO
 from Evaluator.evaluate_rpe import calc_motion_error, calc_rot_error
 from TartanVO import TartanVO
+from mapper import Mapper
 
 from pvgo import run_pvgo
 from imu_integrator import run_imu_preintegrator
@@ -13,6 +14,7 @@ from torch.utils.data import Dataset, DataLoader
 
 import pypose as pp
 import numpy as np
+import cv2
 
 import os
 from os import makedirs
@@ -37,11 +39,16 @@ def init_epoch():
     pgo_poses_list = [np.concatenate((init_state['pos'], init_state['rot']))]
     pgo_vels_list = [init_state['vel']]
 
+    global mapper
+    mapper = Mapper()
+
 
 if __name__ == '__main__':
 
     start_time = time.time()
     timer = Timer()
+
+    print('\ndevice:', torch.cuda.get_device_name())
 
     args = get_args()
     print('\n==============================================')
@@ -163,7 +170,8 @@ if __name__ == '__main__':
             
         res = tartanvo.run_batch(sample)
         motions = res['pose']
-        flows = res['flow']
+        masks = res['mask']
+        depths = res['depth']
 
         timer.toc('vo')
 
@@ -234,6 +242,17 @@ if __name__ == '__main__':
 
         timer.toc('opt')
 
+        ############################## mapping ######################################################################
+        for i in range(0, args.batch_size, 2):
+            img = sample['img0'][i].permute(1, 2, 0).numpy()
+            img = cv2.resize(img, None, fx=1/4, fy=1/4, interpolation=cv2.INTER_LINEAR)
+            img = torch.from_numpy(img).permute(2, 0, 1)
+
+            intrinsic_calib = sample['intrinsic_calib']
+            fx, fy, cx, cy = intrinsic_calib[i] / 4
+
+            mapper.add_frame(img, depths[i], pp.SE3(pgo_poses[i]) @ dataset.rgb2imu_pose, fx, fy, cx, cy, masks[i])
+
         ############################## log and snapshot ######################################################################
         timer.tic('print')
 
@@ -265,14 +284,18 @@ if __name__ == '__main__':
 
         timer.tic('snapshot')
 
-        if step_cnt % args.snapshot_interval == 0:
+        if step_cnt < 10 or step_cnt % args.snapshot_interval == 0:
             if not isdir('{}/{}'.format(trainroot, epoch)):
                 makedirs('{}/{}'.format(trainroot, epoch))
+
             np.savetxt('{}/{}/vo_pose.txt'.format(trainroot, epoch), np.stack(vo_poses_list))
             np.savetxt('{}/{}/vo_motion.txt'.format(trainroot, epoch), np.stack(vo_motions_list))
             np.savetxt('{}/{}/pgo_pose.txt'.format(trainroot, epoch), np.stack(pgo_poses_list))
             np.savetxt('{}/{}/pgo_motion.txt'.format(trainroot, epoch), np.stack(pgo_motions_list))
             np.savetxt('{}/{}/pgo_vel.txt'.format(trainroot, epoch), np.stack(pgo_vels_list))
+
+            mapper.save_data('{}/{}/cloud.txt'.format(trainroot, epoch))
+            mapper.write_ply('{}/{}/cloud.ply'.format(trainroot, epoch))
 
         timer.toc('snapshot')
 
@@ -290,6 +313,10 @@ if __name__ == '__main__':
 
         print('Epoch progress: {:.2%}, time left {:.2f}min'.format((step_cnt-epoch_step*(epoch-1))/epoch_step, (epoch_step*epoch-step_cnt)*timer.avg('step')/60))
         print('Train progress: {:.2%}, time left {:.2f}min'.format(step_cnt/total_step, (total_step-step_cnt)*timer.avg('step')/60))
+
+        # for test
+        # if step_cnt >= 5:
+        #     break
 
     end_time = time.time()
     print('\nTotal time consume:', end_time-start_time)

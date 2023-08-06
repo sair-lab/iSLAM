@@ -1,3 +1,31 @@
+#!/bin/sh
+
+#SBATCH --cluster=ub-hpc
+###SBATCH --cluster=faculty
+
+#SBATCH --partition=general-compute --qos=general-compute
+###SBATCH --partition=scavenger --qos=scavenger
+
+#SBATCH --time=48:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=4
+
+###SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:tesla_v100-pcie-32gb:1
+###SBATCH --gres=gpu:tesla_v100-pcie-16gb:2
+###SBATCH --gres=gpu:nvidia_a16:12
+
+#SBATCH --mem=40000
+
+#SBATCH --job-name="train_vo_pvgo"
+
+###SBATCH --output= "result_$(date +"%Y_%m_%d_%k_%M_%S").out"
+
+###SBATCH --mail-user=taimengf@buffalo.edu
+###SBATCH --mail-type=ALL
+
+###SBATCH --requeue
+
 source ~/.bashrc
 conda activate impe-learning
 
@@ -6,8 +34,9 @@ data_dir=/projects/academic/cwx/euroc/MH_01_easy/mav0
 loss_weight='(4,0.1,2,0.1)'
 rot_w=1
 trans_w=0.1
+batch_size=8
 lr=3e-6
-epoch=7
+epoch=1
 train_portion=1
 
 use_scale=false
@@ -39,14 +68,14 @@ if [ "$use_scale" = true ]; then
         --project-name ${project_name} \
         --train-name ${train_name} \
         --vo-model-name ./models/stereo_cvt_tartanvo_1914.pkl \
-        --batch-size 8 \
+        --batch-size ${batch_size} \
         --worker-num 2 \
         --data-root ${data_dir} \
         --start-frame 0 \
         --end-frame -1 \
         --train-epoch ${epoch} \
         --print-interval 1 \
-        --snapshot-interval 1 \
+        --snapshot-interval 100 \
         --lr ${lr} \
         --loss-weight ${loss_weight} \
         --data-type euroc \
@@ -63,14 +92,14 @@ else
         --project-name ${project_name} \
         --train-name ${train_name} \
         --vo-model-name ./models/stereo_cvt_tartanvo_1914.pkl \
-        --batch-size 8 \
+        --batch-size ${batch_size} \
         --worker-num 2 \
         --data-root ${data_dir} \
         --start-frame 0 \
         --end-frame -1 \
         --train-epoch ${epoch} \
         --print-interval 1 \
-        --snapshot-interval 1 \
+        --snapshot-interval 100 \
         --lr ${lr} \
         --loss-weight ${loss_weight} \
         --data-type euroc \
