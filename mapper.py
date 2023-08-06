@@ -50,7 +50,6 @@ class Mapper:
         # print('mapper wp', torch.max(torch.linalg.norm(points_world, dim=1)))
 
         points = torch.cat([points_world, colors.view(-1, 3)], dim=1)
-        print(points.shape)
 
         self.frame_points.append(points)
 

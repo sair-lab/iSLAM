@@ -315,8 +315,8 @@ if __name__ == '__main__':
         print('Train progress: {:.2%}, time left {:.2f}min'.format(step_cnt/total_step, (total_step-step_cnt)*timer.avg('step')/60))
 
         # for test
-        # if step_cnt >= 5:
-        #     break
+        if step_cnt >= 5:
+            break
 
     end_time = time.time()
     print('\nTotal time consume:', end_time-start_time)

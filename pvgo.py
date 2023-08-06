@@ -1,3 +1,5 @@
+import time
+
 import torch
 from torch import nn
 import torch.utils.data as Data
@@ -120,10 +122,15 @@ def run_pvgo(poses_np, motions, links, imu_drots_np, imu_dtrans_np, imu_dvels_np
     optimizer = pp.optim.LM(graph, solver=solver, strategy=strategy, min=1e-4, vectorize=False)
     scheduler = StopOnPlateau(optimizer, steps=10, patience=3, decreasing=1e-3, verbose=False)
 
+    # start_time = time.time()
+
     # optimization loop
     while scheduler.continual:
         loss = optimizer.step(input=(edges, poses, imu_drots, imu_dtrans, imu_dvels, dts))
         scheduler.step(loss)
+
+    # end_time = time.time()
+    # print('pgo time:', end_time - start_time)
 
     # get loss for backpropagate
     trans_loss, rot_loss = graph.vo_loss(edges, data.poses_withgrad)
