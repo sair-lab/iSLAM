@@ -39,7 +39,7 @@ lr=3e-6
 epoch=1
 train_portion=1
 
-use_scale=false
+use_scale=true
 if [ "$use_scale" = true ]; then
     exp_type='mono'
 else

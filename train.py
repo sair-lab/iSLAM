@@ -87,20 +87,6 @@ if __name__ == '__main__':
     timer.tic('imu')
     print('Running IMU preintegration ...')
 
-    imu_motion_mode = True
-    imu_trans, imu_rots, imu_covs, imu_vels = run_imu_preintegrator(
-        dataset.accels, dataset.gyros, dataset.imu_dts, 
-        init=dataset.imu_init, gravity=dataset.gravity, 
-        device='cuda', motion_mode=imu_motion_mode,
-        rgb2imu_sync=dataset.rgb2imu_sync)
-
-    imu_motions = np.concatenate((imu_trans, imu_rots), axis=1)
-    np.savetxt(trainroot+'/imu_motion.txt', imu_motions)
-    np.savetxt(trainroot+'/imu_dvel.txt', imu_vels)
-    
-    timer.toc('imu')
-    print('IMU preintegration time:', timer.tot('imu'))
-
     if True:   # for IMU debug only
         imu_motion_mode = False
         imu_trans, imu_rots, imu_covs, imu_vels = run_imu_preintegrator(
@@ -117,6 +103,20 @@ if __name__ == '__main__':
         np.savetxt(trainroot+'/imu_gyro.txt', dataset.gyros.reshape(-1, 3))
         np.savetxt(trainroot+'/gt_vel.txt', dataset.vels.reshape(-1, 3))
         np.savetxt(trainroot+'/imu_dt.txt', dataset.imu_dts.reshape(-1, 1))
+
+    imu_motion_mode = True
+    imu_trans, imu_rots, imu_covs, imu_vels = run_imu_preintegrator(
+        dataset.accels, dataset.gyros, dataset.imu_dts, 
+        init=dataset.imu_init, gravity=dataset.gravity, 
+        device='cuda', motion_mode=imu_motion_mode,
+        rgb2imu_sync=dataset.rgb2imu_sync)
+
+    imu_motions = np.concatenate((imu_trans, imu_rots), axis=1)
+    np.savetxt(trainroot+'/imu_motion.txt', imu_motions)
+    np.savetxt(trainroot+'/imu_dvel.txt', imu_vels)
+    
+    timer.toc('imu')
+    print('IMU preintegration time:', timer.tot('imu'))
 
     ############################## init VO model ######################################################################
     tartanvo = TartanVO(
@@ -170,15 +170,17 @@ if __name__ == '__main__':
             
         res = tartanvo.run_batch(sample)
         motions = res['pose']
-        masks = res['mask']
-        depths = res['depth']
+        if not args.use_gt_scale:
+            masks = res['mask']
+            depths = res['depth']
 
         timer.toc('vo')
 
         ############################## convert coordinates ######################################################################
         timer.tic('cvt')
 
-        if args.data_type != 'tartanair':
+        # if args.data_type != 'tartanair':
+        if True:
             motions = tartan2kitti_pypose(motions)
         else:
             motions = cvtSE3_pypose(motions)
@@ -246,15 +248,16 @@ if __name__ == '__main__':
         timer.toc('opt')
 
         ############################## mapping ######################################################################
-        for i in range(0, args.batch_size, 2):
-            img = sample['img0'][i].permute(1, 2, 0).numpy()
-            img = cv2.resize(img, None, fx=1/4, fy=1/4, interpolation=cv2.INTER_LINEAR)
-            img = torch.from_numpy(img).permute(2, 0, 1)
+        if not args.use_gt_scale:
+            for i in range(0, args.batch_size, 2):
+                img = sample['img0'][i].permute(1, 2, 0).numpy()
+                img = cv2.resize(img, None, fx=1/4, fy=1/4, interpolation=cv2.INTER_LINEAR)
+                img = torch.from_numpy(img).permute(2, 0, 1)
 
-            intrinsic_calib = sample['intrinsic_calib']
-            fx, fy, cx, cy = intrinsic_calib[i] / 4
+                intrinsic_calib = sample['intrinsic_calib']
+                fx, fy, cx, cy = intrinsic_calib[i] / 4
 
-            mapper.add_frame(img, depths[i], pp.SE3(pgo_poses[i]) @ dataset.rgb2imu_pose, fx, fy, cx, cy, masks[i])
+                mapper.add_frame(img, depths[i], pp.SE3(pgo_poses[i]) @ dataset.rgb2imu_pose, fx, fy, cx, cy, masks[i])
 
         ############################## log and snapshot ######################################################################
         timer.tic('print')
@@ -298,8 +301,9 @@ if __name__ == '__main__':
             np.savetxt('{}/{}/pgo_motion.txt'.format(trainroot, epoch), np.stack(pgo_motions_list))
             np.savetxt('{}/{}/pgo_vel.txt'.format(trainroot, epoch), np.stack(pgo_vels_list))
 
-            mapper.save_data('{}/{}/cloud.txt'.format(trainroot, epoch))
-            mapper.write_ply('{}/{}/cloud.ply'.format(trainroot, epoch))
+            if not args.use_gt_scale:
+                mapper.save_data('{}/{}/cloud.txt'.format(trainroot, epoch))
+                mapper.write_ply('{}/{}/cloud.ply'.format(trainroot, epoch))
 
         timer.toc('snapshot')
 

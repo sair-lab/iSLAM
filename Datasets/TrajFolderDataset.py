@@ -11,7 +11,7 @@ from torch.utils.data.distributed import DistributedSampler
 from os import listdir, path
 from os.path import isdir, isfile
 
-from .transformation import pos_quats2SEs, pose2motion, SEs2ses, pose2motion_pypose
+from .transformation import pos_quats2SEs, pose2motion, SEs2ses, pose2motion_pypose, tartan2kitti_pypose
 from .utils import make_intrinsics_layer
 
 
@@ -71,7 +71,7 @@ class TartanAirTrajFolderLoader:
         files = listdir(imgfolder)
         self.rgbfiles = [(imgfolder +'/'+ ff) for ff in files if (ff.endswith('.png') or ff.endswith('.jpg'))]
         self.rgbfiles.sort()
-        self.rgb_dts = np.ones(len(self.rgbfiles)-1, dtype=np.float32) * 0.1
+        self.rgb_dts = np.ones(len(self.rgbfiles), dtype=np.float32) * 0.1
 
         ############################## load stereo right images ######################################################################
         if isdir(datadir + '/image_right'):
@@ -110,6 +110,7 @@ class TartanAirTrajFolderLoader:
         ############################## load gt poses ######################################################################
         posefile = datadir + '/pose_left.txt'
         self.poses = np.loadtxt(posefile).astype(np.float32)
+        self.poses = tartan2kitti_pypose(self.poses).numpy()
         self.vels = None
 
         ############################## load imu data ######################################################################

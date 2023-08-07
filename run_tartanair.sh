@@ -32,7 +32,7 @@ conda activate impe-learning
 
 data_dir=/user/taimengf/projects/cwx/tartanair/TartanAir/abandonedfactory/Easy/P000
 
-loss_weight='(1,0.1,10,1)'
+loss_weight='(0.01,0.1,10,1)'
 rot_w=1
 trans_w=0.1
 batch_size=8
