@@ -60,9 +60,9 @@ def run_imu_preintegrator(accels, gyros, dts, init=None, gravity=9.81007,
     for i in range(N):
         if rgb2imu_sync is None:
             if motion_mode:
-                state = integrator(dt=dts[i], gyro=gyros[i], acc=accels[i], init_state=last_state)
+                state = integrator(dt=dts[i].reshape(1, -1), gyro=gyros[i].reshape(1, -1), acc=accels[i].reshape(1, -1), init_state=last_state)
             else:
-                state = integrator(dt=dts[i], gyro=gyros[i], acc=accels[i])
+                state = integrator(dt=dts[i].reshape(1, -1), gyro=gyros[i].reshape(1, -1), acc=accels[i].reshape(1, -1))
         else:
             st = rgb2imu_sync[i]
             end = rgb2imu_sync[i+1]
@@ -72,6 +72,11 @@ def run_imu_preintegrator(accels, gyros, dts, init=None, gravity=9.81007,
                     state['vel'] = torch.zeros((1, 3), dtype=dtype).to(device)
                 else:
                     state['vel'] = torch.zeros((1, 3), dtype=dtype).to(device)
+            elif st+1 == end:
+                if motion_mode:
+                    state = integrator(dt=dts[st].reshape(1, -1), gyro=gyros[st].reshape(1, -1), acc=accels[st].reshape(1, -1), init_state=last_state)
+                else:
+                    state = integrator(dt=dts[st].reshape(1, -1), gyro=gyros[st].reshape(1, -1), acc=accels[st].reshape(1, -1))
             else:
                 if motion_mode:
                     state = integrator(dt=dts[st:end], gyro=gyros[st:end], acc=accels[st:end], init_state=last_state)

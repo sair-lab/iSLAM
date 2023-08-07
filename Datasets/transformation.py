@@ -1,10 +1,10 @@
 import numpy as np
-#import cv2
-#import pyrr
+import pypose as pp
 from scipy.spatial.transform import Rotation as R
+
 import torch 
 from torch.nn.functional import normalize
-import pypose as pp
+
 
 def line2mat(line_data):
     mat = np.eye(4)
@@ -41,6 +41,7 @@ def SE2se(SE_data):
     result[0:3] = np.array(SE_data[0:3,3].T)
     result[3:6] = SO2so(SE_data[0:3,0:3]).T
     return result
+
 def SO2so(SO_data):
     return R.from_matrix(SO_data).as_rotvec()
 
@@ -52,7 +53,7 @@ def se2SE(se_data):
     result_mat[0:3,0:3] = so2SO(se_data[3:6])
     result_mat[0:3,3]   = np.matrix(se_data[0:3]).T
     return result_mat
-### can get wrong result
+
 def se_mean(se_datas):
     all_SE = np.matrix(np.eye(4))
     for i in range(se_datas.shape[0]):
@@ -159,7 +160,6 @@ def SO2quat(SO_data):
 def quat2SO(quat_data):
     return R.from_quat(quat_data).as_matrix()
 
-
 def pos_quat2SE(quat_data):
     SO = R.from_quat(quat_data[3:7]).as_matrix()
     SE = np.matrix(np.eye(4))
@@ -168,7 +168,6 @@ def pos_quat2SE(quat_data):
     SE = np.array(SE[0:3,:]).reshape(1,12)
     return SE
 
-
 def pos_quats2SEs(quat_datas):
     data_len = quat_datas.shape[0]
     SEs = np.zeros((data_len,12))
@@ -176,7 +175,6 @@ def pos_quats2SEs(quat_datas):
         SE = pos_quat2SE(quat_datas[i_data,:])
         SEs[i_data,:] = SE
     return SEs
-
 
 def pos_quats2SE_matrices(quat_datas):
     data_len = quat_datas.shape[0]
@@ -249,13 +247,13 @@ def cvtSE3_pypose(motion):
     assert False, "Not valid input."
 
 def tartan2kitti_pypose(motion):
+    motion = cvtSE3_pypose(motion)
+    
     T= [[0.,1.,0.,0.],
         [0.,0.,1.,0.],
         [1.,0.,0.,0.],
         [0.,0.,0.,1.]]
     T = pp.from_matrix(T, ltype=pp.SE3_type).to(motion.device)
-
-    motion = cvtSE3_pypose(motion)
 
     return T @ motion @ T.Inv()
 
@@ -271,9 +269,19 @@ def motion2pose_pypose(motion, T=None):
     for m in motion:
         T = T @ m
         pose.append(T)
-    pose = torch.stack(pose)
 
+    pose = pp.SE3(torch.stack(pose))
     return pose
+
+def pose2motion_pypose(pose):
+    pose = cvtSE3_pypose(pose)
+
+    motion = []
+    for i in range(len(pose)-1):
+        motion.append(pose[i].Inv() @ pose[i+1])
+
+    motion = pp.SE3(torch.stack(motion))
+    return motion
 
 def SE32ws(pose_output):    
     pose_output = pp.SE3(pose_output)

@@ -160,7 +160,7 @@ class TartanVO:
             depth = []
             for i in range(pose.shape[0]):
                 fx, fy, cx, cy = intrinsic_calib[i] / 4
-                disp_th_dict = {'kitti':5, 'euroc':1}
+                disp_th_dict = {'kitti':5, 'tartanair':1, 'euroc':1}
                 s, z, m = scale_from_disp_flow(disp[i], flow[i], pose_ENU_SE3[i], fx, fy, cx, cy, baseline[i], 
                                                 mask=edge[i], disp_th=disp_th_dict[sample['datatype'][i]])
                 scale.append(s)

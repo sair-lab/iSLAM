@@ -101,7 +101,7 @@ if __name__ == '__main__':
     timer.toc('imu')
     print('IMU preintegration time:', timer.tot('imu'))
 
-    if False:   # for IMU debug only
+    if True:   # for IMU debug only
         imu_motion_mode = False
         imu_trans, imu_rots, imu_covs, imu_vels = run_imu_preintegrator(
             dataset.accels, dataset.gyros, dataset.imu_dts, 
@@ -178,7 +178,10 @@ if __name__ == '__main__':
         ############################## convert coordinates ######################################################################
         timer.tic('cvt')
 
-        motions = tartan2kitti_pypose(motions)
+        if args.data_type != 'tartanair':
+            motions = tartan2kitti_pypose(motions)
+        else:
+            motions = cvtSE3_pypose(motions)
         T_ic = dataset.rgb2imu_pose.cuda()
         motions = T_ic @ motions @ T_ic.Inv()
 
@@ -261,7 +264,8 @@ if __name__ == '__main__':
             end = current_idx + args.batch_size
             poses_gt = dataset.poses[st:end+1]
             motions_gt = dataset.motions[st:end]
-            if args.data_type == 'tartanair':
+            # if args.data_type == 'tartanair':
+            if False:
                 motions_gt = tartan2kitti_pypose(motions_gt).numpy()
             else:
                 motions_gt = cvtSE3_pypose(motions_gt).numpy()
@@ -315,8 +319,8 @@ if __name__ == '__main__':
         print('Train progress: {:.2%}, time left {:.2f}min'.format(step_cnt/total_step, (total_step-step_cnt)*timer.avg('step')/60))
 
         # for test
-        if step_cnt >= 5:
-            break
+        # if step_cnt >= 5:
+        #     break
 
     end_time = time.time()
     print('\nTotal time consume:', end_time-start_time)

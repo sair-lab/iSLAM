@@ -11,7 +11,7 @@ from torch.utils.data.distributed import DistributedSampler
 from os import listdir, path
 from os.path import isdir, isfile
 
-from .transformation import pos_quats2SEs, pose2motion, SEs2ses
+from .transformation import pos_quats2SEs, pose2motion, SEs2ses, pose2motion_pypose
 from .utils import make_intrinsics_layer
 
 
@@ -124,28 +124,46 @@ class TartanAirTrajFolderLoader:
             # # accel w/o gravity in body frame
             # accels_nograv = np.load(path.join(imudir, "accel_nograv_body.npy")).astype(np.float32)
             
-            # self.accel_bias = -1.0 * np.array([0.01317811, 0.00902851, -0.00521479])
             accel_bias = -1.0 * np.array([-0.02437125, -0.00459115, -0.00392401])
             gyro_bias = -1.0 * np.array([0, 0, 0])
             self.accels = accels - accel_bias
             self.gyros = gyros - gyro_bias
 
+            self.vels = vels
+
             # imu_fps = 100
-            self.imu_dts = np.ones(len(accels)-1, dtype=np.float32) * 0.01
+            self.imu_dts = np.ones(len(accels), dtype=np.float32) * 0.01
             
             # img_fps = 10
-            self.rgb2imu_sync = np.arange(0, len(self.rgbfiles)) * 10
+            self.rgb2imu_sync = [i*10 for i in range(len(self.rgbfiles))]
 
             self.rgb2imu_pose = pp.SE3([0, 0, 0,   0, 0, 0, 1]).to(dtype=torch.float32)
 
             self.gravity = -9.81
 
             self.has_imu = True
-            self.vels = vels
 
         else:
-            self.has_imu = False
-            self.vels = None
+            dt = 0.1
+            self.imu_dts = np.ones(len(self.rgbfiles), dtype=np.float32) * dt
+
+            self.rgb2imu_sync = np.array([i for i in range(len(self.rgbfiles))])
+
+            self.rgb2imu_pose = pp.SE3([0, 0, 0,   0, 0, 0, 1]).to(dtype=torch.float32)
+
+            self.gravity = 0
+
+            self.vels = np.diff(self.poses[:, :3], axis=0) / dt
+            self.vels = np.concatenate([self.vels, self.vels[-1].reshape(1, -1)], axis=0)
+
+            accels_world = np.diff(self.vels, axis=0) / dt
+            accels_world = np.concatenate([accels_world, accels_world[-1].reshape(1, -1)], axis=0)
+            self.accels = (pp.SE3(self.poses).rotation().Inv() @ torch.tensor(accels_world)).numpy()
+
+            motions = pose2motion_pypose(self.poses)
+            self.gyros = motions.rotation().euler().numpy() / dt
+
+            self.has_imu = True
 
 
 class EuRoCTrajFolderLoader:
@@ -528,15 +546,15 @@ class TrajFolderDatasetPVGO(TrajFolderDataset):
             res['path_img0_r'] = self.rgbfiles_right[self.links[idx][0]]
             # res['blxfx'] = np.array([self.focalx * self.baseline], dtype=np.float32) # used for convert disp to depth
             
-        if self.flowfiles is not None:
-            flow = np.load(self.flowfiles[self.links[idx][0]])
-            res['flow'] = [flow]
-            res['path_flow'] = self.flowfiles[self.links[idx][0]]
+        # if self.flowfiles is not None:
+        #     flow = np.load(self.flowfiles[self.links[idx][0]])
+        #     res['flow'] = [flow]
+        #     res['path_flow'] = self.flowfiles[self.links[idx][0]]
 
-        if self.depthfiles is not None:
-            depth = np.load(self.depthfiles[self.links[idx][0]])
-            res['depth0'] = [depth]
-            res['path_depth0'] = self.depthfiles[self.links[idx][0]]
+        # if self.depthfiles is not None:
+        #     depth = np.load(self.depthfiles[self.links[idx][0]])
+        #     res['depth0'] = [depth]
+        #     res['path_depth0'] = self.depthfiles[self.links[idx][0]]
 
         h, w, _ = img0.shape
         intrinsicLayer = make_intrinsics_layer(w, h, self.intrinsic[0], self.intrinsic[1], self.intrinsic[2], self.intrinsic[3])
