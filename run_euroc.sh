@@ -75,7 +75,7 @@ if [ "$use_scale" = true ]; then
         --end-frame -1 \
         --train-epoch ${epoch} \
         --print-interval 1 \
-        --snapshot-interval 100 \
+        --snapshot-interval 10 \
         --lr ${lr} \
         --loss-weight ${loss_weight} \
         --data-type euroc \
@@ -99,7 +99,7 @@ else
         --end-frame -1 \
         --train-epoch ${epoch} \
         --print-interval 1 \
-        --snapshot-interval 100 \
+        --snapshot-interval 10 \
         --lr ${lr} \
         --loss-weight ${loss_weight} \
         --data-type euroc \

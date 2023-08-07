@@ -164,6 +164,24 @@ class TartanAirTrajFolderLoader:
             motions = pose2motion_pypose(self.poses)
             self.gyros = motions.rotation().euler().numpy() / dt
 
+            accel_sigma = np.mean(np.abs(self.accels), axis=0) / 100
+            print('accel_sigma', accel_sigma)
+            accels_noise = np.stack([
+                np.random.normal(0, accel_sigma[0], self.accels.shape[0]),
+                np.random.normal(0, accel_sigma[1], self.accels.shape[0]),
+                np.random.normal(0, accel_sigma[2], self.accels.shape[0])
+            ]).T
+            self.accels += accels_noise
+
+            gyro_sigma = np.mean(np.abs(self.gyros), axis=0) / 100
+            print('gyro_sigma', gyro_sigma)
+            gyros_noise = np.stack([
+                np.random.normal(0, gyro_sigma[0], self.gyros.shape[0]),
+                np.random.normal(0, gyro_sigma[1], self.gyros.shape[0]),
+                np.random.normal(0, gyro_sigma[2], self.gyros.shape[0])
+            ]).T
+            self.gyros += gyros_noise
+
             self.has_imu = True
 
 

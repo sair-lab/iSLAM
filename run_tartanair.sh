@@ -32,7 +32,7 @@ conda activate impe-learning
 
 data_dir=/user/taimengf/projects/cwx/tartanair/TartanAir/abandonedfactory/Easy/P000
 
-loss_weight='(0.01,0.1,10,1)'
+loss_weight='(0.01,10,10,1)'
 rot_w=1
 trans_w=0.1
 batch_size=8
@@ -76,7 +76,7 @@ if [ "$use_scale" = true ]; then
         --end-frame -1 \
         --train-epoch ${epoch} \
         --print-interval 1 \
-        --snapshot-interval 100 \
+        --snapshot-interval 10 \
         --lr ${lr} \
         --loss-weight ${loss_weight} \
         --data-type tartanair \
@@ -100,7 +100,7 @@ else
         --end-frame -1 \
         --train-epoch ${epoch} \
         --print-interval 1 \
-        --snapshot-interval 100 \
+        --snapshot-interval 10 \
         --lr ${lr} \
         --loss-weight ${loss_weight} \
         --data-type tartanair \
