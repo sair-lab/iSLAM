@@ -1,0 +1,96 @@
+Submitted batch job 13194297 on cluster ub-hpc
+Submitted batch job 13194298 on cluster ub-hpc
+Submitted batch job 13194299 on cluster ub-hpc
+Submitted batch job 13194300 on cluster ub-hpc
+Submitted batch job 13194301 on cluster ub-hpc
+Submitted batch job 13194302 on cluster ub-hpc
+Submitted batch job 13194303 on cluster ub-hpc
+Submitted batch job 13194304 on cluster ub-hpc
+Submitted batch job 13194305 on cluster ub-hpc
+Submitted batch job 13194306 on cluster ub-hpc
+Submitted batch job 13194307 on cluster ub-hpc
+Submitted batch job 13194308 on cluster ub-hpc
+Submitted batch job 13194309 on cluster ub-hpc
+Submitted batch job 13194310 on cluster ub-hpc
+Submitted batch job 13194311 on cluster ub-hpc
+Submitted batch job 13194312 on cluster ub-hpc
+Submitted batch job 13194313 on cluster ub-hpc
+Submitted batch job 13194314 on cluster ub-hpc
+Submitted batch job 13194315 on cluster ub-hpc
+Submitted batch job 13194316 on cluster ub-hpc
+Submitted batch job 13194317 on cluster ub-hpc
+Submitted batch job 13194318 on cluster ub-hpc
+Submitted batch job 13194319 on cluster ub-hpc
+Submitted batch job 13194320 on cluster ub-hpc
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/soulcity/Hard/P000 soulcity_Hard_P000 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/soulcity/Hard/P001 soulcity_Hard_P001 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/soulcity/Hard/P002 soulcity_Hard_P002 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/soulcity/Hard/P003 soulcity_Hard_P003 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/soulcity/Hard/P004 soulcity_Hard_P004 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/soulcity/Hard/P005 soulcity_Hard_P005 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/soulcity/Hard/P008 soulcity_Hard_P008 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/soulcity/Hard/P009 soulcity_Hard_P009 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/japanesealley/Hard/P000 japanesealley_Hard_P000 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/japanesealley/Hard/P001 japanesealley_Hard_P001 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/japanesealley/Hard/P002 japanesealley_Hard_P002 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/japanesealley/Hard/P003 japanesealley_Hard_P003 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/japanesealley/Hard/P004 japanesealley_Hard_P004 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/japanesealley/Hard/P005 japanesealley_Hard_P005 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/ocean/Hard/P000 ocean_Hard_P000 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/ocean/Hard/P001 ocean_Hard_P001 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/ocean/Hard/P002 ocean_Hard_P002 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/ocean/Hard/P003 ocean_Hard_P003 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/ocean/Hard/P004 ocean_Hard_P004 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/ocean/Hard/P005 ocean_Hard_P005 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/ocean/Hard/P006 ocean_Hard_P006 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/ocean/Hard/P007 ocean_Hard_P007 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/ocean/Hard/P008 ocean_Hard_P008 <<<<<
+
+
+>>>>> sbatch run_tartanair.sh /user/taimengf/projects/cwx/tartanair/TartanAir/ocean/Hard/P009 ocean_Hard_P009 <<<<<
+

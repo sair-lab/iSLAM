@@ -6,12 +6,12 @@
 #SBATCH --partition=general-compute --qos=general-compute
 ###SBATCH --partition=scavenger --qos=scavenger
 
-#SBATCH --time=48:00:00
+#SBATCH --time=10:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
 
-###SBATCH --gres=gpu:1
-#SBATCH --gres=gpu:tesla_v100-pcie-32gb:1
+#SBATCH --gres=gpu:1
+###SBATCH --gres=gpu:tesla_v100-pcie-32gb:1
 ###SBATCH --gres=gpu:tesla_v100-pcie-16gb:2
 ###SBATCH --gres=gpu:nvidia_a16:12
 
@@ -30,14 +30,15 @@
 source ~/.bashrc
 conda activate impe-learning
 
-data_dir=/user/taimengf/projects/cwx/tartanair/TartanAir/abandonedfactory/Easy/P000
+# data_dir=/user/taimengf/projects/cwx/tartanair/TartanAir/abandonedfactory/Easy/P000
+data_dir=$1
 
 loss_weight='(0.01,10,10,1)'
 rot_w=1
 trans_w=0.1
 batch_size=8
 lr=3e-6
-epoch=1
+epoch=7
 train_portion=1
 
 use_scale=false
@@ -47,7 +48,7 @@ else
     exp_type='stereo'
 fi
 
-project_name=test_tartanair
+project_name=$2
 train_name=${rot_w}Ra_${trans_w}ta_delayOptm_lr=${lr}_${loss_weight}_${exp_type}
 
 echo -e "\n=============================================="
