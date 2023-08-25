@@ -47,6 +47,8 @@ def get_args():
                         help='portion to bp loss (default: "False")')
     parser.add_argument('--use-gt-scale', action='store_true', default=False,
                         help='use gt scale to correct trans scale (default: "False")')
+    parser.add_argument('--enable-mapping', action='store_true', default=False,
+                        help='enable mapping, generate point cloud (default: "False")')
 
     args = parser.parse_args()
     args.loss_weight = eval(args.loss_weight)   # string to tuple

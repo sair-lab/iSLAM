@@ -248,7 +248,7 @@ if __name__ == '__main__':
         timer.toc('opt')
 
         ############################## mapping ######################################################################
-        if not args.use_gt_scale:
+        if not args.use_gt_scale and args.enable_mapping:
             for i in range(0, args.batch_size, 2):
                 img = sample['img0'][i].permute(1, 2, 0).numpy()
                 img = cv2.resize(img, None, fx=1/4, fy=1/4, interpolation=cv2.INTER_LINEAR)
@@ -301,7 +301,7 @@ if __name__ == '__main__':
             np.savetxt('{}/{}/pgo_motion.txt'.format(trainroot, epoch), np.stack(pgo_motions_list))
             np.savetxt('{}/{}/pgo_vel.txt'.format(trainroot, epoch), np.stack(pgo_vels_list))
 
-            if not args.use_gt_scale:
+            if not args.use_gt_scale and args.enable_mapping:
                 mapper.save_data('{}/{}/cloud.txt'.format(trainroot, epoch))
                 mapper.write_ply('{}/{}/cloud.ply'.format(trainroot, epoch))
 

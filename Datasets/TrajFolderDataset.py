@@ -8,7 +8,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from os import listdir, path
+from os import listdir, makedirs
 from os.path import isdir, isfile
 
 from .transformation import pos_quats2SEs, pose2motion, SEs2ses, pose2motion_pypose, tartan2kitti_pypose
@@ -114,73 +114,79 @@ class TartanAirTrajFolderLoader:
         self.vels = None
 
         ############################## load imu data ######################################################################
-        if isdir(datadir + '/imu'):
-            imudir = datadir + '/imu'
-            # acceleration in the body frame
-            accels = np.load(imudir + '/accel_left.npy')
-            # angular rate in the body frame
-            gyros = np.load(imudir + '/gyro_left.npy')
-            # velocity in the world frame
-            vels = np.load(imudir + '/vel_left.npy')
-            # # accel w/o gravity in body frame
-            # accels_nograv = np.load(path.join(imudir, "accel_nograv_body.npy")).astype(np.float32)
-            
-            accel_bias = -1.0 * np.array([-0.02437125, -0.00459115, -0.00392401])
-            gyro_bias = -1.0 * np.array([0, 0, 0])
-            self.accels = accels - accel_bias
-            self.gyros = gyros - gyro_bias
-
-            self.vels = vels
-
-            # imu_fps = 100
-            self.imu_dts = np.ones(len(accels), dtype=np.float32) * 0.01
-            
-            # img_fps = 10
-            self.rgb2imu_sync = [i*10 for i in range(len(self.rgbfiles))]
-
-            self.rgb2imu_pose = pp.SE3([0, 0, 0,   0, 0, 0, 1]).to(dtype=torch.float32)
-
-            self.gravity = -9.81
-
-            self.has_imu = True
-
-        else:
+        # if isdir(datadir + '/imu'):
+        if False:
             dt = 0.1
             self.imu_dts = np.ones(len(self.rgbfiles), dtype=np.float32) * dt
-
             self.rgb2imu_sync = np.array([i for i in range(len(self.rgbfiles))])
 
             self.rgb2imu_pose = pp.SE3([0, 0, 0,   0, 0, 0, 1]).to(dtype=torch.float32)
 
             self.gravity = 0
 
+            imudir = datadir + '/imu'
+            # acceleration in the body frame
+            self.accels = np.load(imudir + '/accel_left.npy')
+            # angular rate in the body frame
+            self.gyros = np.load(imudir + '/gyro_left.npy')
+            # velocity in the world frame
+            self.vels = np.load(imudir + '/vel_left.npy')
+
+            self.has_imu = True
+
+        else:
+            dt = 0.1
+            self.imu_dts = np.ones(len(self.rgbfiles), dtype=np.float32) * dt
+            self.rgb2imu_sync = np.array([i for i in range(len(self.rgbfiles))])
+
+            self.rgb2imu_pose = pp.SE3([0, 0, 0,   0, 0, 0, 1]).to(dtype=torch.float32)
+
+            self.gravity = 0
+
+            # genarate world vel
             self.vels = np.diff(self.poses[:, :3], axis=0) / dt
             self.vels = np.concatenate([self.vels, self.vels[-1].reshape(1, -1)], axis=0)
 
+            # generate accel
             accels_world = np.diff(self.vels, axis=0) / dt
             accels_world = np.concatenate([accels_world, accels_world[-1].reshape(1, -1)], axis=0)
             self.accels = (pp.SE3(self.poses).rotation().Inv() @ torch.tensor(accels_world)).numpy()
 
+            # generate gyro
             motions = pose2motion_pypose(self.poses)
             self.gyros = motions.rotation().euler().numpy() / dt
 
-            accel_sigma = np.mean(np.abs(self.accels), axis=0) / 100
-            print('accel_sigma', accel_sigma)
+            # add accel noise
+            accel_sigma = np.mean(np.abs(self.accels), axis=0) * 1e-2
+            # print('accel_sigma', accel_sigma)
             accels_noise = np.stack([
                 np.random.normal(0, accel_sigma[0], self.accels.shape[0]),
                 np.random.normal(0, accel_sigma[1], self.accels.shape[0]),
                 np.random.normal(0, accel_sigma[2], self.accels.shape[0])
             ]).T
+            # print('accels_noise', accels_noise[:10])
+            # accels_noise = np.cumsum(accels_noise, axis=0)
             self.accels += accels_noise
 
-            gyro_sigma = np.mean(np.abs(self.gyros), axis=0) / 100
-            print('gyro_sigma', gyro_sigma)
+            # add gyro noise
+            gyro_sigma = np.mean(np.abs(self.gyros), axis=0) * 1e-2
+            # print('gyro_sigma', gyro_sigma)
             gyros_noise = np.stack([
                 np.random.normal(0, gyro_sigma[0], self.gyros.shape[0]),
                 np.random.normal(0, gyro_sigma[1], self.gyros.shape[0]),
                 np.random.normal(0, gyro_sigma[2], self.gyros.shape[0])
             ]).T
+            # print('gyros_noise', gyros_noise[:10])
+            # gyros_noise = np.cumsum(gyros_noise, axis=0)
             self.gyros += gyros_noise
+
+            # save results
+            imudir = datadir + '/imu'
+            if not isdir(imudir):
+                makedirs(imudir)
+            np.save(imudir + '/accel_left.npy', self.accels)
+            np.save(imudir + '/gyro_left.npy', self.gyros)
+            np.save(imudir + '/vel_left.npy', self.vels)
 
             self.has_imu = True
 
@@ -377,7 +383,7 @@ class KITTITrajFolderLoader:
         import datetime as dt
 
         """Load timestamps from file."""
-        timestamp_file = path.join(
+        timestamp_file = os.path.join(
             datapath, subfolder, 'timestamps.txt')
 
         # Read and parse the timestamps
