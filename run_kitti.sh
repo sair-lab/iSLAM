@@ -28,7 +28,7 @@
 
 
 source ~/.bashrc
-conda activate impe-learning
+conda activate iSLAM
 
 data_dir=/projects/academic/cwx/kitti_raw/2011_10_03/2011_10_03_drive_0034_sync
 

@@ -125,7 +125,7 @@ def run_pvgo(poses_np, motions, links, imu_drots_np, imu_dtrans_np, imu_dvels_np
     # start_time = time.time()
 
     # optimization loop
-    while scheduler.continual:
+    while scheduler.continual():
         loss = optimizer.step(input=(edges, poses, imu_drots, imu_dtrans, imu_dvels, dts))
         scheduler.step(loss)
 

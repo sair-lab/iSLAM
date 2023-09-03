@@ -2,6 +2,7 @@ models/
 train_*/
 test_*/
 temp_*/
+slurm_*/
 
 __pycache__/
 
@@ -17,4 +18,4 @@ wandb/
 *.html
 *.ipynb
 
-submit_tartanair.py
+submit_*
