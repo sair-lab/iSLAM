@@ -119,9 +119,17 @@ if __name__ == '__main__':
     print('IMU preintegration time:', timer.tot('imu'))
 
     ############################## init VO model ######################################################################
-    tartanvo = TartanVO(
-        vo_model_name=args.vo_model_name, correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts
-    )
+    if args.start_epoch == 1:
+        tartanvo = TartanVO(
+            vo_model_name=args.vo_model_name, 
+            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts
+        )
+    else:
+        last_pose_model_name = '{}/{}/vonet.pkl'.format(args.save_model_dir, args.start_epoch - 1)
+        tartanvo = TartanVO(
+            vo_model_name=args.vo_model_name, pose_model_name=last_pose_model_name, 
+            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts
+        )
     if args.vo_optimizer == 'adam':
         vo_optimizer = optim.Adam(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
     elif args.vo_optimizer == 'rmsprop':
@@ -129,9 +137,9 @@ if __name__ == '__main__':
     elif args.vo_optimizer == 'sgd':
         vo_optimizer = optim.SGD(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
 
-    epoch = 1
-    step_cnt = 0
+    epoch = args.start_epoch
     epoch_step = len(dataset) // args.batch_size
+    step_cnt = (args.start_epoch - 1) * epoch_step
     total_step = epoch_step * args.train_epoch
     init_epoch()
     

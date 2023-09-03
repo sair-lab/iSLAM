@@ -49,6 +49,8 @@ def get_args():
                         help='use gt scale to correct trans scale (default: "False")')
     parser.add_argument('--enable-mapping', action='store_true', default=False,
                         help='enable mapping, generate point cloud (default: "False")')
+    parser.add_argument('--start-epoch', type=int, default=1,
+                        help='start epoch (default: 1)')
 
     args = parser.parse_args()
     args.loss_weight = eval(args.loss_weight)   # string to tuple

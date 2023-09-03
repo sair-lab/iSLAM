@@ -16,3 +16,5 @@ wandb/
 *.npy
 *.html
 *.ipynb
+
+submit_tartanair.py

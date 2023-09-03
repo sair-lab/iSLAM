@@ -54,27 +54,22 @@ class TartanVO:
 
         loadin_dict = {}
         for k, v in pretrain_dict.items():
-            if k in model_dict and v.size() == model_dict[k].size():
-                loadin_dict[k] = v
+            for kk, vv in model_dict.items():
+                if (k.endswith(kk) or kk.endswith(k)) and v.size () == vv.size():
+                    loadin_dict[kk] = v
 
         # print('model_dict:')
-        # for k in model_dict:
-        #     print(k, model_dict[k].shape)
+        # for kk in model_dict:
+        #     print(kk, model_dict[kk].shape)
         # print('pretrain:')
         # for k in pretrain_dict:
         #     print(k, pretrain_dict[k].shape)
 
         if 0 == len(loadin_dict):
-            for k, v in pretrain_dict.items():
-                kk = k[7:]  # try to remove "module." prefix
-                if kk in model_dict and v.size() == model_dict[kk].size():
-                    loadin_dict[kk] = v
-
-        if 0 == len(loadin_dict):
             raise Exception("Could not load model from %s." % (modelname), "load_model")
 
-        for k in model_dict.keys():
-            if k not in loadin_dict:
+        for kk in model_dict.keys():
+            if kk not in loadin_dict:
                 print("! [load_model] Key {} in model but not in {}!".format(k, modelname))
                 # if k.endswith('weight'):
                 #     print('\tinit with kaiming_normal_')

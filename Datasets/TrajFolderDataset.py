@@ -114,8 +114,8 @@ class TartanAirTrajFolderLoader:
         self.vels = None
 
         ############################## load imu data ######################################################################
-        # if isdir(datadir + '/imu'):
-        if False:
+        if isdir(datadir + '/imu'):
+        # if False:
             dt = 0.1
             self.imu_dts = np.ones(len(self.rgbfiles), dtype=np.float32) * dt
             self.rgb2imu_sync = np.array([i for i in range(len(self.rgbfiles))])

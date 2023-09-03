@@ -30,15 +30,16 @@
 source ~/.bashrc
 conda activate impe-learning
 
-data_dir=/user/taimengf/projects/cwx/tartanair/TartanAir/abandonedfactory/Easy/P000
-# data_dir=$1
+# data_dir=/user/taimengf/projects/cwx/tartanair/TartanAir/ocean/Hard/P001
+data_dir=$1
 
-loss_weight='(0.01,10,10,1)'
+loss_weight='(0.05,10,10,3)'
 rot_w=1
 trans_w=0.1
 batch_size=8
-lr=3e-6
-epoch=1
+lr=1e-6
+epoch=13
+start_epoch=1
 train_portion=1
 
 use_scale=false
@@ -48,8 +49,8 @@ else
     exp_type='stereo'
 fi
 
-project_name=test_tartanair
-# project_name=$2
+# project_name=ocean_Hard_P001
+project_name=$2
 train_name=${rot_w}Ra_${trans_w}ta_delayOptm_lr=${lr}_${loss_weight}_${exp_type}
 
 echo -e "\n=============================================="
@@ -58,9 +59,11 @@ echo "train name = ${train_name}"
 echo "data dir = ${data_dir}"
 echo "=============================================="
 
-rm -r train_results/${project_name}/${train_name}
+if [ "$start_epoch" = 1 ]; then
+    rm -r train_results/${project_name}/${train_name}
+    rm -r train_results_models/${project_name}/${train_name}
+fi
 mkdir -p train_results/${project_name}/${train_name}
-rm -r train_results_models/${project_name}/${train_name}
 mkdir -p train_results_models/${project_name}/${train_name}
 
 if [ "$use_scale" = true ]; then
@@ -77,6 +80,7 @@ if [ "$use_scale" = true ]; then
         --start-frame 0 \
         --end-frame -1 \
         --train-epoch ${epoch} \
+        --start-epoch ${start_epoch} \
         --print-interval 1 \
         --snapshot-interval 10 \
         --lr ${lr} \
@@ -101,6 +105,7 @@ else
         --start-frame 0 \
         --end-frame -1 \
         --train-epoch ${epoch} \
+        --start-epoch ${start_epoch} \
         --print-interval 1 \
         --snapshot-interval 10 \
         --lr ${lr} \
