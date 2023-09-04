@@ -17,7 +17,7 @@ np.set_printoptions(precision=4, suppress=True, threshold=10000)
 
 class TartanVO:
     def __init__(self, vo_model_name=None, pose_model_name=None, flow_model_name=None, stereo_model_name=None,
-                    device_id=0, correct_scale=True, fix_parts=(), use_DDP=False):
+                    device_id=0, correct_scale=True, fix_parts=()):
         
         self.device_id = device_id
         self.correct_scale = correct_scale
@@ -41,11 +41,7 @@ class TartanVO:
             print('Loading stereo network...')
             self.load_model(self.vonet.stereoNet, stereo_model_name)
         
-        self.vonet.flowNet = self.vonet.flowNet.cuda(self.device_id)
-        self.vonet.stereoNet = self.vonet.stereoNet.cuda(self.device_id)
-        self.vonet.flowPoseNet = self.vonet.flowPoseNet.cuda(self.device_id)
-        if use_DDP:
-            self.vonet.flowPoseNet = DistributedDataParallel(self.vonet.flowPoseNet, device_ids=[self.device_id])
+        self.vonet = torch.compile(self.vonet).cuda(self.device_id)
 
 
     def load_model(self, model, modelname):

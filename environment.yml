@@ -2,15 +2,17 @@ name: iSLAM
 channels:
   - pytorch
   - nvidia
+  - conda-forge
   - defaults
 dependencies:
   - _libgcc_mutex=0.1=main
   - _openmp_mutex=5.1=1_gnu
+  - binutils_impl_linux-64=2.38=h2a08ee3_1
   - blas=1.0=mkl
   - brotlipy=0.7.0=py38h27cfd23_1003
   - bzip2=1.0.8=h7b6447c_0
-  - ca-certificates=2023.05.30=h06a4308_0
-  - certifi=2023.7.22=py38h06a4308_0
+  - ca-certificates=2023.7.22=hbcca054_0
+  - certifi=2023.7.22=pyhd8ed1ab_0
   - cffi=1.15.1=py38h5eee18b_3
   - cryptography=41.0.2=py38h22a60cf_0
   - cuda-cudart=11.7.99=0
@@ -21,14 +23,19 @@ dependencies:
   - cuda-runtime=11.7.1=0
   - ffmpeg=4.3=hf484d3e_0
   - freetype=2.12.1=h4a9f257_0
+  - gcc=11.2.0=h702ea55_10
+  - gcc_impl_linux-64=11.2.0=h1234567_1
   - giflib=5.2.1=h5eee18b_3
   - gmp=6.2.1=h295c915_3
   - gmpy2=2.1.2=py38heeb90bb_0
   - gnutls=3.6.15=he1e5248_0
+  - gxx=11.2.0=h702ea55_10
+  - gxx_impl_linux-64=11.2.0=h1234567_1
   - idna=3.4=py38h06a4308_0
   - intel-openmp=2023.1.0=hdb19cb5_46305
   - jinja2=3.1.2=py38h06a4308_0
   - jpeg=9e=h5eee18b_1
+  - kernel-headers_linux-64=2.6.32=he073ed8_16
   - lame=3.100=h7b6447c_0
   - lcms2=2.12=h3be6417_0
   - ld_impl_linux-64=2.38=h1181459_1
@@ -41,6 +48,7 @@ dependencies:
   - libcusparse=11.7.4.91=0
   - libdeflate=1.17=h5eee18b_0
   - libffi=3.4.4=h6a678d5_0
+  - libgcc-devel_linux-64=11.2.0=h1234567_1
   - libgcc-ng=11.2.0=h1234567_1
   - libgomp=11.2.0=h1234567_1
   - libiconv=1.16=h7f8727e_2
@@ -48,6 +56,7 @@ dependencies:
   - libnpp=11.7.4.75=0
   - libnvjpeg=11.8.0.2=0
   - libpng=1.6.39=h5eee18b_0
+  - libstdcxx-devel_linux-64=11.2.0=h1234567_1
   - libstdcxx-ng=11.2.0=h1234567_1
   - libtasn1=4.19.0=h5eee18b_0
   - libtiff=4.5.1=h6a678d5_0
@@ -79,6 +88,7 @@ dependencies:
   - readline=8.2=h5eee18b_0
   - setuptools=68.0.0=py38h06a4308_0
   - sqlite=3.41.2=h5eee18b_0
+  - sysroot_linux-64=2.12=he073ed8_16
   - tbb=2021.8.0=hdb19cb5_0
   - tk=8.6.12=h1ccaba5_0
   - torchtriton=2.0.0=py38

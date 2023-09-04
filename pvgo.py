@@ -119,7 +119,7 @@ def run_pvgo(poses_np, motions, links, imu_drots_np, imu_dtrans_np, imu_dvels_np
     graph = PoseVelGraph(nodes, vels, device, loss_weight).to(device)
     solver = ppos.Cholesky()
     strategy = ppost.TrustRegion(radius=radius)
-    optimizer = pp.optim.LM(graph, solver=solver, strategy=strategy, min=1e-4, vectorize=False)
+    optimizer = pp.optim.LM(graph, solver=solver, strategy=strategy, min=1e-4, vectorize=True)
     scheduler = StopOnPlateau(optimizer, steps=10, patience=3, decreasing=1e-3, verbose=False)
 
     # start_time = time.time()

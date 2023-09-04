@@ -48,12 +48,32 @@ if __name__ == '__main__':
     start_time = time.time()
     timer = Timer()
 
-    print('\ndevice:', torch.cuda.get_device_name())
+    torch.set_float32_matmul_precision('high')
 
+    print('\ndevice:', torch.cuda.get_device_name())
     args = get_args()
     print('\n==============================================')
     print(args)
     print('==============================================\n')
+
+    ############################## init VO model ######################################################################
+    if args.start_epoch == 1:
+        tartanvo = TartanVO(
+            vo_model_name=args.vo_model_name, 
+            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts
+        )
+    else:
+        last_pose_model_name = '{}/{}/vonet.pkl'.format(args.save_model_dir, args.start_epoch - 1)
+        tartanvo = TartanVO(
+            vo_model_name=args.vo_model_name, pose_model_name=last_pose_model_name, 
+            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts
+        )
+    if args.vo_optimizer == 'adam':
+        vo_optimizer = optim.Adam(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
+    elif args.vo_optimizer == 'rmsprop':
+        vo_optimizer = optim.RMSprop(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
+    elif args.vo_optimizer == 'sgd':
+        vo_optimizer = optim.SGD(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
 
     ############################## init dataset ######################################################################   
     timer.tic('dataset')
@@ -118,25 +138,7 @@ if __name__ == '__main__':
     timer.toc('imu')
     print('IMU preintegration time:', timer.tot('imu'))
 
-    ############################## init VO model ######################################################################
-    if args.start_epoch == 1:
-        tartanvo = TartanVO(
-            vo_model_name=args.vo_model_name, 
-            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts
-        )
-    else:
-        last_pose_model_name = '{}/{}/vonet.pkl'.format(args.save_model_dir, args.start_epoch - 1)
-        tartanvo = TartanVO(
-            vo_model_name=args.vo_model_name, pose_model_name=last_pose_model_name, 
-            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts
-        )
-    if args.vo_optimizer == 'adam':
-        vo_optimizer = optim.Adam(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
-    elif args.vo_optimizer == 'rmsprop':
-        vo_optimizer = optim.RMSprop(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
-    elif args.vo_optimizer == 'sgd':
-        vo_optimizer = optim.SGD(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
-
+    ############################## init before loop ######################################################################
     epoch = args.start_epoch
     epoch_step = len(dataset) // args.batch_size
     step_cnt = (args.start_epoch - 1) * epoch_step
