@@ -41,6 +41,7 @@ class TartanVO:
             print('Loading stereo network...')
             self.load_model(self.vonet.stereoNet, stereo_model_name)
         
+        # self.vonet = self.vonet.cuda(self.device_id)
         self.vonet = torch.compile(self.vonet).cuda(self.device_id)
 
 
@@ -88,7 +89,7 @@ class TartanVO:
     def run_batch(self, sample, is_train=True):
 
         ############################## init inputs ######################################################################   
-        nb = False
+        nb = True
         img0 = sample['img0'].cuda(self.device_id, non_blocking=nb)
         img1 = sample['img1'].cuda(self.device_id, non_blocking=nb)
         intrinsic = sample['intrinsic'].cuda(self.device_id, non_blocking=nb)

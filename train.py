@@ -50,7 +50,7 @@ if __name__ == '__main__':
 
     torch.set_float32_matmul_precision('high')
 
-    print('\ndevice:', torch.cuda.get_device_name())
+    print('\ndevice:', torch.cuda.get_device_name(), '\tcount:', torch.cuda.device_count())
     args = get_args()
     print('\n==============================================')
     print(args)

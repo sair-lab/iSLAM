@@ -28,10 +28,13 @@
 
 
 source ~/.bashrc
-conda activate impe-learning
+conda activate iSLAM
+
+export CUDA_VISIBLE_DEVICES=1
 
 # data_dir=/user/taimengf/projects/cwx/tartanair/TartanAir/ocean/Hard/P001
-data_dir=$1
+data_dir=/home/data2/TartanAir/TartanAir_comb/ocean/Hard/P001
+# data_dir=$1
 
 loss_weight='(0.05,10,10,3)'
 rot_w=1
@@ -49,8 +52,8 @@ else
     exp_type='stereo'
 fi
 
-# project_name=ocean_Hard_P001
-project_name=$2
+project_name=test_tartanair
+# project_name=$2
 train_name=${rot_w}Ra_${trans_w}ta_delayOptm_lr=${lr}_${loss_weight}_${exp_type}
 
 echo -e "\n=============================================="
