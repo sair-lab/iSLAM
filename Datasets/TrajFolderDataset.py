@@ -590,6 +590,10 @@ class TrajFolderDatasetPVGO(TrajFolderDataset):
 
         res['datatype'] = self.datatype
 
+        st = min(self.links[idx][0], self.links[idx][1])
+        end = max(self.links[idx][0], self.links[idx][1])
+        res['dt'] = np.sum(self.rgb_dts[st:end])
+
         if self.right2left_pose != None:
             res['extrinsic'] = self.right2left_pose.Log().numpy()
 

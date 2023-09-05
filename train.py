@@ -119,11 +119,11 @@ if __name__ == '__main__':
     ############################## main training loop ######################################################################
     while epoch <= args.train_epoch:    # this while loops per batch (step)
         timer.tic('step')
-        
-        step_cnt += 1
-        print('\nStart train step {} at epoch {} ...'.format(step_cnt, epoch))
 
         try:
+            step_cnt += 1
+            print('\nStart train step {} at epoch {} ...'.format(step_cnt, epoch))
+
             timer.tic('load')
             # load data batch
             sample = next(dataiter)
@@ -190,24 +190,27 @@ if __name__ == '__main__':
         imu_trans, imu_rots, imu_covs, imu_vels = imu_module.integrate(st, end, init_state, motion_mode=False)
         imu_poses = pp.SE3(torch.cat((imu_trans, imu_rots.tensor()), axis=1))
 
-        imu_trans, imu_rots, imu_covs, imu_vels = imu_module.integrate(st, end, init_state, motion_mode=True)
+        imu_dtrans, imu_drots, imu_dcovs, imu_dvels = imu_module.integrate(st, end, init_state, motion_mode=True)
 
         timer.toc('imu')
         
         ############################## run PVGO ######################################################################
         timer.tic('pgo')
 
-        # fetch current data
-        st = current_idx
-        end = current_idx + args.batch_size
-        current_dts = dataset.rgb_dts[st:end]
-        current_links = sample['link'].numpy() - current_idx
+        dts = sample['dt']
+        links = sample['link'] - current_idx
 
         trans_loss, rot_loss, pgo_poses, pgo_vels, pgo_motions = run_pvgo(
-            poses_np, motions, current_links, 
-            imu_rots.numpy(), imu_trans.numpy(), imu_vels.numpy(), init_state, current_dts, 
-            device='cuda', loss_weight=args.loss_weight, init_with_imu_rot=True, init_with_imu_vel=True
+            imu_poses, imu_vels,
+            motions, links, dts,
+            imu_drots, imu_dtrans, imu_dvels,
+            device='cuda', radius=1e4,
+            loss_weight=args.loss_weight
         )
+
+        pgo_motions = pgo_motions.numpy()
+        pgo_poses = pgo_poses.numpy()
+        pgo_vels = pgo_vels.numpy()
 
         pgo_motions_list.extend(pgo_motions)
         pgo_poses_list.extend(pgo_poses[1:])

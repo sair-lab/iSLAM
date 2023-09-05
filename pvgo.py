@@ -2,10 +2,6 @@ import time
 
 import torch
 from torch import nn
-import torch.utils.data as Data
-
-import numpy as np
-import matplotlib.pyplot as plt
 
 import pypose as pp
 import pypose.optim.solver as ppos
@@ -23,8 +19,8 @@ class PoseVelGraph(nn.Module):
         self.device = device
 
         assert nodes.size(0) == vels.size(0)
-        self.nodes = pp.Parameter(nodes)
-        self.vels = torch.nn.Parameter(vels)
+        self.nodes = pp.Parameter(nodes.clone().to(device))
+        self.vels = torch.nn.Parameter(vels.clone().to(device))
 
         assert len(loss_weight) == 4
         # loss weight hyper para
@@ -38,10 +34,10 @@ class PoseVelGraph(nn.Module):
         nodes = self.nodes
         vels = self.vels
         
-        E = edges.size(0)
-        M = nodes.size(0) - 1
-        assert E == poses.size(0)
-        assert M == imu_drots.size(0) == imu_dtrans.size(0) == imu_dvels.size(0)
+        # E = edges.size(0)
+        # M = nodes.size(0) - 1
+        # assert E == poses.size(0)
+        # assert M == imu_drots.size(0) == imu_dtrans.size(0) == imu_dvels.size(0)
         
         # VO constraint
         node1 = nodes[edges[:, 0]]
@@ -103,20 +99,19 @@ class PoseVelGraph(nn.Module):
         return nodes, vels
 
 
-def run_pvgo(poses_np, motions, links, imu_drots_np, imu_dtrans_np, imu_dvels_np, imu_init, dts, 
-                device='cuda:0', init_with_imu_rot=True, init_with_imu_vel=True, radius=1e4, loss_weight=(1,1,1,1)):
+def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtrans, imu_dvels, 
+                device='cuda:0', radius=1e4, loss_weight=(1,1,1,1)):
 
     # init inputs
-    data = PVGO_Dataset(poses_np, motions, links, imu_drots_np, imu_dtrans_np, imu_dvels_np, imu_init, dts, 
-                        device, init_with_imu_rot, init_with_imu_vel)
-    nodes, vels = data.nodes, data.vels
-    edges, poses = data.edges, data.poses
-    imu_drots, imu_dtrans, imu_dvels = data.imu_drots, data.imu_dtrans, data.imu_dvels
-    dts = data.dts
-    node0 = nodes[0].clone()
+    edges = links.to(device)
+    poses = vo_motions.detach().to(device)
+    imu_drots = imu_drots.to(device)
+    imu_dtrans = imu_dtrans.to(device)
+    imu_dvels = imu_dvels.to(device)
+    dts = dts.unsqueeze(-1).to(device)
 
     # build graph and optimizer
-    graph = PoseVelGraph(nodes, vels, device, loss_weight).to(device)
+    graph = PoseVelGraph(init_nodes, init_vels, device, loss_weight).to(device)
     solver = ppos.Cholesky()
     strategy = ppost.TrustRegion(radius=radius)
     optimizer = pp.optim.LM(graph, solver=solver, strategy=strategy, min=1e-4, vectorize=True)
@@ -133,13 +128,13 @@ def run_pvgo(poses_np, motions, links, imu_drots_np, imu_dtrans_np, imu_dvels_np
     # print('pgo time:', end_time - start_time)
 
     # get loss for backpropagate
-    trans_loss, rot_loss = graph.vo_loss(edges, data.poses_withgrad)
+    trans_loss, rot_loss = graph.vo_loss(edges, vo_motions)
 
     # for test
     # trans_loss, rot_loss = graph.vo_loss_unroll(edges, data.poses_withgrad)
 
     # align nodes to the original first pose
-    nodes, vels = graph.align_to(node0)
+    nodes, vels = graph.align_to(init_nodes[0].to(device))
     nodes = nodes.detach().cpu()
     vels = vels.detach().cpu()
     
@@ -147,4 +142,4 @@ def run_pvgo(poses_np, motions, links, imu_drots_np, imu_dtrans_np, imu_dvels_np
     edges = edges.cpu()
     motions = nodes[edges[:, 0]].Inv() @ nodes[edges[:, 1]]
 
-    return trans_loss, rot_loss, nodes.numpy(), vels.numpy(), motions.numpy()
+    return trans_loss, rot_loss, nodes, vels, motions
