@@ -557,20 +557,13 @@ class TrajFolderDatasetPVGO(TrajFolderDataset):
         img1 = cv2.imread(self.rgbfiles[self.links[idx][1]], cv2.IMREAD_COLOR)
         img0 = self.undistort(img0)
         img1 = self.undistort(img1)
-        # cv2.imwrite('temp/{}_img0.png'.format(idx), img0)
-        # cv2.imwrite('temp/{}_img1.png'.format(idx), img1)
         res['img0'] = [img0]
         res['img1'] = [img1]
-        res['path_img0'] = self.rgbfiles[self.links[idx][0]]
-        res['path_img1'] = self.rgbfiles[self.links[idx][1]]
 
         if self.rgbfiles_right is not None:
             img0_r = cv2.imread(self.rgbfiles_right[self.links[idx][0]], cv2.IMREAD_COLOR)
             img0_r = self.undistort(img0_r, True)
-            # cv2.imwrite('temp/{}_img0_r.png'.format(idx), img0_r)
             res['img0_r'] = [img0_r]
-            res['path_img0_r'] = self.rgbfiles_right[self.links[idx][0]]
-            # res['blxfx'] = np.array([self.focalx * self.baseline], dtype=np.float32) # used for convert disp to depth
             
         # if self.flowfiles is not None:
         #     flow = np.load(self.flowfiles[self.links[idx][0]])
@@ -586,22 +579,18 @@ class TrajFolderDatasetPVGO(TrajFolderDataset):
         intrinsicLayer = make_intrinsics_layer(w, h, self.intrinsic[0], self.intrinsic[1], self.intrinsic[2], self.intrinsic[3])
         res['intrinsic'] = [intrinsicLayer]
 
+        if self.transform:
+            res = self.transform(res)
+
         res['intrinsic_calib'] = self.intrinsic.copy()
 
         res['link'] = np.array(self.links[idx])
 
-        if self.transform:
-            res = self.transform(res)
+        res['motion'] = self.motions[idx]
 
-        if self.motions is not None:
-            res['motion'] = self.motions[idx]
-
-        if self.has_imu and self.imu_motions is not None:
-            res['imu_motion'] = self.imu_motions[idx]
+        res['datatype'] = self.datatype
 
         if self.right2left_pose != None:
             res['extrinsic'] = self.right2left_pose.Log().numpy()
-
-        res['datatype'] = self.datatype
 
         return res

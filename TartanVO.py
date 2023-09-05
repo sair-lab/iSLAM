@@ -9,20 +9,26 @@ import pypose as pp
 from Network.VONet import VONet
 
 from dense_ba import scale_from_disp_flow
-from Datasets.transformation import tartan2kitti_pypose
+from Datasets.transformation import tartan2kitti_pypose, cvtSE3_pypose
 from Datasets.utils import save_images, warp_images
 
 np.set_printoptions(precision=4, suppress=True, threshold=10000)
 
 
-class TartanVO:
+class TartanVO(nn.Module):
     def __init__(self, vo_model_name=None, pose_model_name=None, flow_model_name=None, stereo_model_name=None,
-                    device_id=0, correct_scale=True, fix_parts=()):
+                    device_id=0, correct_scale=True, fix_parts=(), T_body_cam=None):
+        
+        super(TartanVO, self).__init__()
         
         self.device_id = device_id
         self.correct_scale = correct_scale
+        if T_body_cam is None:
+            self.T_body_cam = pp.identity_SE3().cuda(self.device_id)
+        else:
+            self.T_body_cam = cvtSE3_pypose(T_body_cam).cuda(self.device_id)
         # the output scale factor
-        self.pose_std = torch.tensor([0.13, 0.13, 0.13, 0.013, 0.013, 0.013], dtype=torch.float32).cuda(self.device_id)
+        self.pose_std = torch.tensor([0.13, 0.13, 0.13, 0.013, 0.013, 0.013]).cuda(self.device_id)
 
         self.vonet = VONet(fix_parts=fix_parts)
 
@@ -41,8 +47,8 @@ class TartanVO:
             print('Loading stereo network...')
             self.load_model(self.vonet.stereoNet, stereo_model_name)
         
-        # self.vonet = self.vonet.cuda(self.device_id)
-        self.vonet = torch.compile(self.vonet).cuda(self.device_id)
+        self.vonet = self.vonet.cuda(self.device_id)
+        # self.vonet = torch.compile(self.vonet).cuda(self.device_id)
 
 
     def load_model(self, model, modelname):
@@ -86,7 +92,7 @@ class TartanVO:
         return model
 
 
-    def run_batch(self, sample, is_train=True):
+    def forward(self, sample, is_train=True):
 
         ############################## init inputs ######################################################################   
         nb = True
@@ -102,8 +108,6 @@ class TartanVO:
 
         self.vonet.train() if is_train else self.vonet.eval()
         _ = torch.set_grad_enabled(is_train)
-
-        res = {}
 
         ############################## forward vonet ######################################################################   
         flow, disp, pose = self.vonet(img0, img1, img0_norm, img0_r_norm, intrinsic)
@@ -164,10 +168,6 @@ class TartanVO:
             
             trans = torch.nn.functional.normalize(pose[:, :3], dim=1) * scale.view(-1, 1)
             pose = torch.cat([trans, pose[:, 3:]], dim=1)
-
-            res['pose'] = pose
-            res['mask'] = mask
-            res['depth'] = depth
             
         else:
             ############################## recover scale from GT ######################################################################   
@@ -177,9 +177,10 @@ class TartanVO:
             trans = torch.nn.functional.normalize(pose[:, :3], dim=1) * scale.view(-1,1)
             pose = torch.cat([trans, pose[:, 3:]], dim=1)
 
-            res['pose'] = pose
+        pose = tartan2kitti_pypose(pose)
+        pose = self.T_body_cam @ pose @ self.T_body_cam.Inv()
 
-        return res
+        return pose
 
 
     def pred_flow(self, img0, img1):

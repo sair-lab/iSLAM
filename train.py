@@ -6,7 +6,7 @@ from TartanVO import TartanVO
 from mapper import Mapper
 
 from pvgo import run_pvgo
-from imu_integrator import run_imu_preintegrator
+from imu_integrator import IMUModule
 
 import torch
 import torch.optim as optim
@@ -56,25 +56,6 @@ if __name__ == '__main__':
     print(args)
     print('==============================================\n')
 
-    ############################## init VO model ######################################################################
-    if args.start_epoch == 1:
-        tartanvo = TartanVO(
-            vo_model_name=args.vo_model_name, 
-            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts
-        )
-    else:
-        last_pose_model_name = '{}/{}/vonet.pkl'.format(args.save_model_dir, args.start_epoch - 1)
-        tartanvo = TartanVO(
-            vo_model_name=args.vo_model_name, pose_model_name=last_pose_model_name, 
-            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts
-        )
-    if args.vo_optimizer == 'adam':
-        vo_optimizer = optim.Adam(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
-    elif args.vo_optimizer == 'rmsprop':
-        vo_optimizer = optim.RMSprop(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
-    elif args.vo_optimizer == 'sgd':
-        vo_optimizer = optim.SGD(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
-
     ############################## init dataset ######################################################################   
     timer.tic('dataset')
     print('Loading dataset ...')
@@ -97,46 +78,36 @@ if __name__ == '__main__':
     timer.toc('dataset')
     print('Load dataset time:', timer.tot('dataset'))
 
+    ############################## init VO model ######################################################################
+    if args.start_epoch == 1:
+        tartanvo = TartanVO(
+            vo_model_name=args.vo_model_name, 
+            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts, T_body_cam=dataset.rgb2imu_pose
+        )
+    else:
+        last_pose_model_name = '{}/{}/vonet.pkl'.format(args.save_model_dir, args.start_epoch - 1)
+        tartanvo = TartanVO(
+            vo_model_name=args.vo_model_name, pose_model_name=last_pose_model_name, 
+            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts, T_body_cam=dataset.rgb2imu_pose
+        )
+    if args.vo_optimizer == 'adam':
+        vo_optimizer = optim.Adam(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
+    elif args.vo_optimizer == 'rmsprop':
+        vo_optimizer = optim.RMSprop(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
+    elif args.vo_optimizer == 'sgd':
+        vo_optimizer = optim.SGD(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
+
+    imu_module = IMUModule(
+        dataset.accels, dataset.gyros, dataset.imu_dts,
+        dataset.imu_init, dataset.gravity, dataset.rgb2imu_sync, 
+        device='cuda'
+    )
+
     ############################## logs before running ######################################################################
     trainroot = args.result_dir
     with open(trainroot+'/args.txt', 'w') as f:
         f.write(str(args))
     np.savetxt(trainroot+'/gt_pose.txt', dataset.poses)
-
-    ############################## IMU preintegration ######################################################################
-    timer.tic('imu')
-    print('Running IMU preintegration ...')
-
-    if True:   # for IMU debug only
-        imu_motion_mode = False
-        imu_trans, imu_rots, imu_covs, imu_vels = run_imu_preintegrator(
-            dataset.accels, dataset.gyros, dataset.imu_dts, 
-            init=dataset.imu_init, gravity=dataset.gravity, 
-            device='cuda', motion_mode=imu_motion_mode,
-            rgb2imu_sync=dataset.rgb2imu_sync)
-
-        imu_poses = np.concatenate((imu_trans, imu_rots), axis=1)
-        np.savetxt(trainroot+'/imu_pose.txt', imu_poses)
-        np.savetxt(trainroot+'/imu_vel.txt', imu_vels)
-
-        np.savetxt(trainroot+'/imu_accel.txt', dataset.accels.reshape(-1, 3))
-        np.savetxt(trainroot+'/imu_gyro.txt', dataset.gyros.reshape(-1, 3))
-        np.savetxt(trainroot+'/gt_vel.txt', dataset.vels.reshape(-1, 3))
-        np.savetxt(trainroot+'/imu_dt.txt', dataset.imu_dts.reshape(-1, 1))
-
-    imu_motion_mode = True
-    imu_trans, imu_rots, imu_covs, imu_vels = run_imu_preintegrator(
-        dataset.accels, dataset.gyros, dataset.imu_dts, 
-        init=dataset.imu_init, gravity=dataset.gravity, 
-        device='cuda', motion_mode=imu_motion_mode,
-        rgb2imu_sync=dataset.rgb2imu_sync)
-
-    imu_motions = np.concatenate((imu_trans, imu_rots), axis=1)
-    np.savetxt(trainroot+'/imu_motion.txt', imu_motions)
-    np.savetxt(trainroot+'/imu_dvel.txt', imu_vels)
-    
-    timer.toc('imu')
-    print('IMU preintegration time:', timer.tot('imu'))
 
     ############################## init before loop ######################################################################
     epoch = args.start_epoch
@@ -177,26 +148,28 @@ if __name__ == '__main__':
 
         ############################## forward VO ######################################################################
         timer.tic('vo')
-            
-        res = tartanvo.run_batch(sample)
-        motions = res['pose']
-        if not args.use_gt_scale:
-            masks = res['mask']
-            depths = res['depth']
-
+        motions = tartanvo(sample)
         timer.toc('vo')
 
-        ############################## convert coordinates ######################################################################
-        timer.tic('cvt')
-
-        # if args.data_type != 'tartanair':
-        if True:
-            motions = tartan2kitti_pypose(motions)
-        else:
-            motions = cvtSE3_pypose(motions)
-        T_ic = dataset.rgb2imu_pose.cuda()
-        motions = T_ic @ motions @ T_ic.Inv()
-
+        # batch_motion_se3 = pp.cumprod(motions, dim=0)[-1].Log()
+        # print(batch_motion_se3.size())
+        # jac = {}
+        # for i in range(6):
+        #     batch_motion_se3[i].backward(retain_graph=True)
+        #     for name, para in tartanvo.vonet.flowPoseNet.named_parameters():
+        #         if name in jac:
+        #             jac[name].append(para.grad.clone())
+        #         else:
+        #             jac[name] = [para.grad.clone()]
+        #         para.grad.zero_()
+        # mem = 0
+        # for name in jac.keys():
+        #     jac[name] = torch.stack(jac[name])
+        #     print(name, jac[name].size(), jac[name].element_size(), jac[name].nelement())
+        #     mem += jac[name].element_size() * jac[name].nelement()
+        # print('mem in GB', mem / 1e9)
+        # quit()
+ 
         T0 = pgo_poses_list[-1]
         poses = motion2pose_pypose(motions[:args.batch_size], T0)
         motions_np = motions.detach().cpu().numpy()
@@ -208,7 +181,18 @@ if __name__ == '__main__':
         vo_motions_list.extend(motions_np)
         vo_poses_list.extend(poses_vo_np[1:])
 
-        timer.toc('cvt')
+        ############################## IMU preintegration ######################################################################
+        timer.tic('imu')
+
+        st = current_idx
+        end = current_idx + args.batch_size
+
+        imu_trans, imu_rots, imu_covs, imu_vels = imu_module.integrate(st, end, init_state, motion_mode=False)
+        imu_poses = pp.SE3(torch.cat((imu_trans, imu_rots.tensor()), axis=1))
+
+        imu_trans, imu_rots, imu_covs, imu_vels = imu_module.integrate(st, end, init_state, motion_mode=True)
+
+        timer.toc('imu')
         
         ############################## run PVGO ######################################################################
         timer.tic('pgo')
@@ -216,15 +200,12 @@ if __name__ == '__main__':
         # fetch current data
         st = current_idx
         end = current_idx + args.batch_size
-        current_imu_rots = imu_rots[st:end]
-        current_imu_trans = imu_trans[st:end]
-        current_imu_vels = imu_vels[st:end]
         current_dts = dataset.rgb_dts[st:end]
         current_links = sample['link'].numpy() - current_idx
 
         trans_loss, rot_loss, pgo_poses, pgo_vels, pgo_motions = run_pvgo(
             poses_np, motions, current_links, 
-            current_imu_rots, current_imu_trans, current_imu_vels, init_state, current_dts, 
+            imu_rots.numpy(), imu_trans.numpy(), imu_vels.numpy(), init_state, current_dts, 
             device='cuda', loss_weight=args.loss_weight, init_with_imu_rot=True, init_with_imu_vel=True
         )
 
@@ -277,11 +258,7 @@ if __name__ == '__main__':
             end = current_idx + args.batch_size
             poses_gt = dataset.poses[st:end+1]
             motions_gt = dataset.motions[st:end]
-            # if args.data_type == 'tartanair':
-            if False:
-                motions_gt = tartan2kitti_pypose(motions_gt).numpy()
-            else:
-                motions_gt = cvtSE3_pypose(motions_gt).numpy()
+            motions_gt = cvtSE3_pypose(motions_gt).numpy()
             
             vo_R_errs, vo_t_errs, R_norms, t_norms = calc_motion_error(motions_gt, motions_np, allow_rescale=False)
             print('Pred: R:%.5f t:%.5f' % (np.mean(vo_R_errs), np.mean(vo_t_errs)))
