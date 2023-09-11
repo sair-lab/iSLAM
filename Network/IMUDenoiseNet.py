@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import numpy as np
 import pypose as pp
 
 
@@ -61,12 +62,18 @@ class IMUCorrector_CNN_GRU(nn.Module):
         acc_cov = torch.exp(cov_output[..., 0:3])
         gyro_cov = torch.exp(cov_output[..., 3:6])
 
+        corrected_acc = corrected_acc.squeeze(0)
+        corrected_gyro = corrected_gyro.squeeze(0)
+        acc_cov = acc_cov.squeeze(0)
+        gyro_cov = gyro_cov.squeeze(0)
+        # print(corrected_acc.shape, corrected_gyro.shape, acc_cov.shape, gyro_cov.shape)
+
         if eval:
             return corrected_acc, corrected_gyro, acc_cov, gyro_cov
         else:
             return self.imu(
-                init_state=data['init_state'], dt=data['dt'],
-                gyro=corrected_gyro, acc=corrected_acc, 
+                init_state=data['init_state'], dt=data['dt'].unsqueeze(-1),
+                gyro=corrected_gyro, acc=corrected_acc,
                 acc_cov=acc_cov, gyro_cov=gyro_cov
             )
 
@@ -100,7 +107,7 @@ if __name__ == '__main__':
         start_frame=start_frame, end_frame=end_frame
     )
 
-    imu_denoise_net = IMUCorrector_CNN_GRU()
+    imu_denoise_net = IMUCorrector_CNN_GRU().to(torch.double)
 
     pretrain = torch.load('./models/imu_denoise.pkl')
     imu_denoise_net.load_state_dict(pretrain)
@@ -108,8 +115,14 @@ if __name__ == '__main__':
     data = {}
     data['acc'] = torch.tensor(dataset.accels[:80])
     data['gyro'] = torch.tensor(dataset.gyros[:80])
-    data['init_state'] = dataset.imu_init
     data['dt'] = torch.tensor(dataset.imu_dts[:80])
+    init_state = {}
+    for k in dataset.imu_init.keys():
+        if k == 'rot':
+            init_state[k] = pp.SO3(dataset.imu_init[k])
+        else:
+            init_state[k] = torch.tensor(dataset.imu_init[k])
+    data['init_state'] = init_state
 
     states = imu_denoise_net.forward(data, eval=False)
 
