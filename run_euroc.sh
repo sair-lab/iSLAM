@@ -26,8 +26,8 @@
 
 ###SBATCH --requeue
 
-source ~/.bashrc
-conda activate impe-learning
+
+export CUDA_VISIBLE_DEVICES=1
 
 data_dir=/projects/academic/cwx/euroc/MH_01_easy/mav0
 
@@ -49,7 +49,7 @@ fi
 project_name=test_euroc
 train_name=${rot_w}Ra_${trans_w}ta_delayOptm_lr=${lr}_${loss_weight}_${exp_type}
 
-echo -e "\n=============================================="
+echo "\n=============================================="
 echo "project name = ${project_name}"
 echo "train name = ${train_name}"
 echo "data dir = ${data_dir}"

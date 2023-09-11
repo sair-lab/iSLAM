@@ -10,17 +10,14 @@ import pypose.optim.corrector as ppoc
 import pypose.optim.strategy as ppost
 from pypose.optim.scheduler import StopOnPlateau
 
-from pgo_dataset import PVGO_Dataset
-
  
 class PoseVelGraph(nn.Module):
-    def __init__(self, nodes, vels, device, loss_weight):
+    def __init__(self, nodes, vels, loss_weight):
         super().__init__()
-        self.device = device
 
         assert nodes.size(0) == vels.size(0)
-        self.nodes = pp.Parameter(nodes.clone().to(device))
-        self.vels = torch.nn.Parameter(vels.clone().to(device))
+        self.nodes = pp.Parameter(nodes.clone())
+        self.vels = torch.nn.Parameter(vels.clone())
 
         assert len(loss_weight) == 4
         # loss weight hyper para
@@ -111,7 +108,7 @@ def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtran
     dts = dts.unsqueeze(-1).to(device)
 
     # build graph and optimizer
-    graph = PoseVelGraph(init_nodes, init_vels, device, loss_weight).to(device)
+    graph = PoseVelGraph(init_nodes, init_vels, loss_weight).to(device)
     solver = ppos.Cholesky()
     strategy = ppost.TrustRegion(radius=radius)
     optimizer = pp.optim.LM(graph, solver=solver, strategy=strategy, min=1e-4, vectorize=True)

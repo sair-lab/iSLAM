@@ -1,12 +1,14 @@
 from Datasets.utils import ToTensor, Compose, CropCenter, DownscaleFlow, Normalize, SqueezeBatchDim
-from Datasets.transformation import tartan2kitti_pypose, motion2pose_pypose, cvtSE3_pypose
-from Datasets.TrajFolderDataset import TrajFolderDatasetPVGO
-from Evaluator.evaluate_rpe import calc_motion_error, calc_rot_error
+from Datasets.transformation import tartan2kitti_pypose, motion2pose_pypose, pose2motion_pypose, cvtSE3_pypose
+from Datasets.utils import kitti_raw2odometry, euroc_raw2short
+from Datasets.TrajFolderDataset import TrajFolderDataset
+from Evaluator.evaluate_rpe import calc_motion_error
 from TartanVO import TartanVO
 from mapper import Mapper
 
 from pvgo import run_pvgo
 from imu_integrator import IMUModule
+from loop_closure import LoopClosure
 
 import torch
 import torch.optim as optim
@@ -18,7 +20,7 @@ import cv2
 
 import os
 from os import makedirs
-from os.path import isdir
+from os.path import isdir, isfile
 from timer import Timer
 import time
 
@@ -39,8 +41,33 @@ def init_epoch():
     pgo_poses_list = [np.concatenate((init_state['pos'], init_state['rot']))]
     pgo_vels_list = [init_state['vel']]
 
+    global keyframes
+    keyframes = None
+
     global mapper
     mapper = Mapper()
+
+
+def snapshot(final=False):
+    if not isdir('{}/{}'.format(trainroot, epoch)):
+        makedirs('{}/{}'.format(trainroot, epoch))
+
+    np.savetxt('{}/{}/vo_pose.txt'.format(trainroot, epoch), np.stack(vo_poses_list))
+    np.savetxt('{}/{}/vo_motion.txt'.format(trainroot, epoch), np.stack(vo_motions_list))
+    np.savetxt('{}/{}/pgo_pose.txt'.format(trainroot, epoch), np.stack(pgo_poses_list))
+    np.savetxt('{}/{}/pgo_motion.txt'.format(trainroot, epoch), np.stack(pgo_motions_list))
+    np.savetxt('{}/{}/pgo_vel.txt'.format(trainroot, epoch), np.stack(pgo_vels_list))
+
+    if not args.use_gt_scale and args.enable_mapping:
+        mapper.save_data('{}/{}/cloud.txt'.format(trainroot, epoch))
+        mapper.write_ply('{}/{}/cloud.ply'.format(trainroot, epoch))
+
+    if final:
+        if keyframes is not None:
+            np.savetxt('{}/{}/loop_pose.txt'.format(trainroot, epoch), loopclosure_poses.numpy())
+            np.savetxt('{}/{}/keyframes.txt'.format(trainroot, epoch), keyframes.numpy(), fmt='%d')
+            np.savetxt('{}/{}/loop_edge.txt'.format(trainroot, epoch), loop_edges.numpy(), fmt='%d')
+            np.savetxt('{}/{}/loop_motion.txt'.format(trainroot, epoch), loop_motions.numpy())
 
 
 if __name__ == '__main__':
@@ -69,9 +96,9 @@ if __name__ == '__main__':
         ToTensor(),
         SqueezeBatchDim()
     ])
-    dataset = TrajFolderDatasetPVGO(
+    dataset = TrajFolderDataset(
         datadir=args.data_root, datatype=args.data_type, transform=transform,
-        start_frame=args.start_frame, end_frame=args.end_frame,
+        start_frame=args.start_frame, end_frame=args.end_frame
     )
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, drop_last=True)
 
@@ -97,11 +124,24 @@ if __name__ == '__main__':
     elif args.vo_optimizer == 'sgd':
         vo_optimizer = optim.SGD(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
 
+    ############################## init IMU module ######################################################################
     imu_module = IMUModule(
         dataset.accels, dataset.gyros, dataset.imu_dts,
         dataset.imu_init, dataset.gravity, dataset.rgb2imu_sync, 
         device='cuda'
     )
+
+    ############################## init loop closure ######################################################################
+    if dataset.datatype == 'kitti':
+        idx = kitti_raw2odometry(dataset.datadir)
+        loop_edges_file = f'./loop_edges/result_kitti{idx}/loop_final.txt'
+    elif dataset.datatype == 'euroc':
+        idx = euroc_raw2short(dataset.datadir)
+        loop_edges_file = f'./loop_edges/result_euroc-{idx}/loop_final.txt'
+    if isfile(loop_edges_file):
+        loop_closure = LoopClosure(dataset, args.batch_size, loop_edges_file)
+    else:
+        loop_closure = None
 
     ############################## logs before running ######################################################################
     trainroot = args.result_dir
@@ -140,6 +180,13 @@ if __name__ == '__main__':
                     makedirs('{}/{}'.format(args.save_model_dir, epoch))
                 save_model_name = '{}/{}/vonet.pkl'.format(args.save_model_dir, epoch)
                 torch.save(tartanvo.vonet.state_dict(), save_model_name)
+
+            # loop closure
+            if loop_closure is not None:
+                loopclosure_poses, keyframes, loop_edges, loop_motions = \
+                    loop_closure.perform(tartanvo, pp.SE3(pgo_poses_list))
+
+            snapshot(final=True)
 
             epoch += 1
             init_epoch()
@@ -199,6 +246,15 @@ if __name__ == '__main__':
 
         dts = sample['dt']
         links = sample['link'] - current_idx
+
+        if keyframes is not None:
+            a = torch.searchsorted(keyframes, current_idx, right=False)
+            b = torch.searchsorted(keyframes, current_idx+args.batch_size, right=True)
+            if b - a > 1:
+                loop_motions = pose2motion_pypose(loopclosure_poses[a:b]).tensor()
+                loop_links = torch.tensor([[keyframes[i], keyframes[i+1]] for i in range(a, b-1)]) - current_idx
+                motions = torch.cat([motions, loop_motions.to(motions.device)], dim=0)
+                links = torch.cat([links, loop_links], dim=0)
 
         trans_loss, rot_loss, pgo_poses, pgo_vels, pgo_motions = run_pvgo(
             imu_poses, imu_vels,
@@ -282,18 +338,7 @@ if __name__ == '__main__':
         timer.tic('snapshot')
 
         if step_cnt < 10 or step_cnt % args.snapshot_interval == 0:
-            if not isdir('{}/{}'.format(trainroot, epoch)):
-                makedirs('{}/{}'.format(trainroot, epoch))
-
-            np.savetxt('{}/{}/vo_pose.txt'.format(trainroot, epoch), np.stack(vo_poses_list))
-            np.savetxt('{}/{}/vo_motion.txt'.format(trainroot, epoch), np.stack(vo_motions_list))
-            np.savetxt('{}/{}/pgo_pose.txt'.format(trainroot, epoch), np.stack(pgo_poses_list))
-            np.savetxt('{}/{}/pgo_motion.txt'.format(trainroot, epoch), np.stack(pgo_motions_list))
-            np.savetxt('{}/{}/pgo_vel.txt'.format(trainroot, epoch), np.stack(pgo_vels_list))
-
-            if not args.use_gt_scale and args.enable_mapping:
-                mapper.save_data('{}/{}/cloud.txt'.format(trainroot, epoch))
-                mapper.write_ply('{}/{}/cloud.ply'.format(trainroot, epoch))
+            snapshot()
 
         timer.toc('snapshot')
 

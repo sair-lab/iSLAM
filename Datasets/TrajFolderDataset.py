@@ -12,7 +12,7 @@ import os
 from os import listdir, makedirs
 from os.path import isdir, isfile
 
-from .transformation import pos_quats2SEs, pose2motion, SEs2ses, pose2motion_pypose, tartan2kitti_pypose
+from .transformation import pos_quats2SEs, pose2motion, SEs2ses, pose2motion_pypose, tartan2kitti_pypose, cvtSE3_pypose
 from .utils import make_intrinsics_layer
 
 
@@ -401,7 +401,7 @@ class KITTITrajFolderLoader:
         return timestamps
 
 
-class TrajFolderDataset(Dataset):
+class TrajFolderDatasetBase(Dataset):
     def __init__(self, datadir, datatype, transform=None, start_frame=0, end_frame=-1, loader=None):
         if loader is None:
             if datatype == 'tartanair':
@@ -414,7 +414,12 @@ class TrajFolderDataset(Dataset):
         if end_frame <= 0:
             end_frame += len(loader.rgbfiles)
 
+        self.datadir = datadir
         self.datatype = datatype
+        self.transform = transform
+        self.start_frame = start_frame
+        self.end_frame = end_frame
+        self.loader = loader
         
         self.rgbfiles = loader.rgbfiles[start_frame:end_frame]
         self.rgb_dts = loader.rgb_dts[start_frame:end_frame-1]
@@ -479,17 +484,29 @@ class TrajFolderDataset(Dataset):
         else:
             self.require_undistort = False
 
-        self.transform = transform
-
         self.links = None
         self.num_link = 0
 
         del loader
 
-    def imu_pose2motion(self, imu_poses):
-        SEs = pos_quats2SEs(imu_poses)
-        matrix = pose2motion(SEs, links=self.links)
-        self.imu_motions = SEs2ses(matrix).astype(np.float32)
+
+class TrajFolderDataset(TrajFolderDatasetBase):
+    def __init__(self, datadir, datatype, transform=None, start_frame=0, end_frame=-1, loader=None, links=None):
+        super(TrajFolderDataset, self).__init__(datadir, datatype, transform, start_frame, end_frame, loader)
+
+        if links is None:
+            self.links = [[i, i+1] for i in range(self.num_img-1)]
+        else:
+            self.links = links
+        self.num_link = len(self.links)
+
+        self.motions = self.calc_motions_by_links(self.links)
+
+    def __getitem__(self, idx):
+        return self.get_pair(self.links[idx][0], self.links[idx][1])
+    
+    def __len__(self):
+        return self.num_link
 
     def calc_motions_by_links(self, links):
         if self.poses is None:
@@ -499,7 +516,7 @@ class TrajFolderDataset(Dataset):
         matrix = pose2motion(SEs, links=links)
         motions = SEs2ses(matrix).astype(np.float32)
         return motions
-
+    
     def undistort(self, img, is_right=False):
         if not self.require_undistort:
             return img
@@ -507,73 +524,20 @@ class TrajFolderDataset(Dataset):
         dst = cv2.remap(img, imgmap[0], imgmap[1], cv2.INTER_AREA)
         return dst
 
-    def __len__(self):
-        return self.num_link
-
-
-class TrajFolderDatasetPVGO(TrajFolderDataset):
-    def __init__(self, datadir, datatype, transform=None, start_frame=0, end_frame=-1, loader=None,
-                    use_loop_closure=False, use_stop_constraint=False, batch_size=None):
-
-        super(TrajFolderDatasetPVGO, self).__init__(datadir, datatype, transform, start_frame, end_frame, loader)
-
-        ############################## generate links ######################################################################
-        self.links = []
-        # # [loop closure] gt pose
-        # if use_loop_closure and self.poses is not None:
-        #     loop_min_interval = 100
-        #     trans_th = np.average([np.linalg.norm(self.poses[i+1, :3] - self.poses[i, :3]) for i in range(len(self.poses)-1)]) * 5
-        #     self.links.extend(gt_pose_loop_detector(self.poses, loop_min_interval, trans_th, 5))
-        # # [loop closure] bag of word (to do)
-        # self.links = bow_orb_loop_detector(self.rgbfiles, loop_min_interval)
-        # # [loop closure] adjancent
-        # loop_range = 2
-        # loop_interval = 1
-        # self.links.extend(adj_loop_detector(self.num_img, loop_range, loop_interval))
-        if batch_size == None:
-            self.links = [[i, i+1] for i in range(self.num_img-1)]
-        else:
-            for current_idx in range(0, self.num_img-batch_size-1, batch_size):
-                for i in range(current_idx, current_idx+batch_size):
-                    self.links.append([i, i+1])
-                for i in range(current_idx, current_idx+batch_size-1):
-                    self.links.append([i, i+2])
-
-
-        self.num_link = len(self.links)
-
-        ############################## calc motions ######################################################################
-        self.motions = self.calc_motions_by_links(self.links)
-
-        ############################## pick stop frames ######################################################################
-        self.stop_frames = []
-        if use_stop_constraint and self.vels_world is not None:
-            self.stop_frames = gt_vel_stop_detector(self.vels_world[::imu_mul], 0.02)
-
-    def __getitem__(self, idx):
+    def get_pair(self, i, j):
         res = {}
 
-        img0 = cv2.imread(self.rgbfiles[self.links[idx][0]], cv2.IMREAD_COLOR)
-        img1 = cv2.imread(self.rgbfiles[self.links[idx][1]], cv2.IMREAD_COLOR)
+        img0 = cv2.imread(self.rgbfiles[i], cv2.IMREAD_COLOR)
+        img1 = cv2.imread(self.rgbfiles[j], cv2.IMREAD_COLOR)
         img0 = self.undistort(img0)
         img1 = self.undistort(img1)
         res['img0'] = [img0]
         res['img1'] = [img1]
 
         if self.rgbfiles_right is not None:
-            img0_r = cv2.imread(self.rgbfiles_right[self.links[idx][0]], cv2.IMREAD_COLOR)
+            img0_r = cv2.imread(self.rgbfiles_right[i], cv2.IMREAD_COLOR)
             img0_r = self.undistort(img0_r, True)
             res['img0_r'] = [img0_r]
-            
-        # if self.flowfiles is not None:
-        #     flow = np.load(self.flowfiles[self.links[idx][0]])
-        #     res['flow'] = [flow]
-        #     res['path_flow'] = self.flowfiles[self.links[idx][0]]
-
-        # if self.depthfiles is not None:
-        #     depth = np.load(self.depthfiles[self.links[idx][0]])
-        #     res['depth0'] = [depth]
-        #     res['path_depth0'] = self.depthfiles[self.links[idx][0]]
 
         h, w, _ = img0.shape
         intrinsicLayer = make_intrinsics_layer(w, h, self.intrinsic[0], self.intrinsic[1], self.intrinsic[2], self.intrinsic[3])
@@ -584,17 +548,14 @@ class TrajFolderDatasetPVGO(TrajFolderDataset):
 
         res['intrinsic_calib'] = self.intrinsic.copy()
 
-        res['link'] = np.array(self.links[idx])
+        res['link'] = np.array([i, j])
 
-        res['motion'] = self.motions[idx]
+        res['dt'] = np.sum(self.rgb_dts[min(i, j):max(i, j)])
 
         res['datatype'] = self.datatype
-
-        st = min(self.links[idx][0], self.links[idx][1])
-        end = max(self.links[idx][0], self.links[idx][1])
-        res['dt'] = np.sum(self.rgb_dts[st:end])
 
         if self.right2left_pose != None:
             res['extrinsic'] = self.right2left_pose.Log().numpy()
 
         return res
+    

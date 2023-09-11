@@ -1309,6 +1309,32 @@ def visflow(flownp, maxF=500.0, n=8, mask=None, hueMax=179, angShift=0.0):
 
     return bgr
 
+
+def kitti_raw2odometry(raw_dir):
+    name = raw_dir.split('/')[-1]
+    mapping = {
+        '2011_10_03_drive_0027':'00',
+        '2011_10_03_drive_0042':'01',
+        '2011_10_03_drive_0034':'02',
+        '2011_09_26_drive_0067':'03',
+        '2011_09_30_drive_0016':'04',
+        '2011_09_30_drive_0018':'05',
+        '2011_09_30_drive_0020':'06',
+        '2011_09_30_drive_0027':'07',
+        '2011_09_30_drive_0028':'08',
+        '2011_09_30_drive_0033':'09',
+        '2011_09_30_drive_0034':'10'
+    }
+    for k in mapping.keys():
+        if name.startswith(k):
+            return mapping[k]
+    return None
+
+def euroc_raw2short(raw_dir):
+    name = raw_dir.split('/')[-2]
+    return ''.join(name.split('_')[:2])
+
+
 if __name__ == '__main__':
     # testflow = np.random.rand(50,30,4).astype(np.float32) * 5
     # randintrinsic = RandomIntrinsic(minlen=10)

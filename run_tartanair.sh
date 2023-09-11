@@ -30,7 +30,7 @@
 export CUDA_VISIBLE_DEVICES=1
 
 # data_dir=/user/taimengf/projects/cwx/tartanair/TartanAir/ocean/Hard/P001
-data_dir=/home/data2/TartanAir/TartanAir_comb/ocean/Hard/P001
+data_dir=/home/data2/TartanAir/TartanAir_comb/abandonedfactory/Easy/P000
 # data_dir=$1
 
 loss_weight='(0.05,10,10,3)'
