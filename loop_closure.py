@@ -36,7 +36,7 @@ class LoopClosure:
 
         if loop_edges_file is not None:
             self.loop_edges = np.loadtxt(loop_edges_file, dtype=int)
-            self.loop_edges = torch.tensor(self.loop_edges)
+            self.loop_edges = torch.tensor(self.loop_edges).view(-1, 2)
         else:
             min_loop = batch_size * 10
             rot_th = torch.max(rot_mag)

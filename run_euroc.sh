@@ -27,16 +27,19 @@
 ###SBATCH --requeue
 
 
-export CUDA_VISIBLE_DEVICES=1
+conda activate iSLAM
 
-data_dir=/projects/academic/cwx/euroc/MH_01_easy/mav0
+# export CUDA_VISIBLE_DEVICES=1
+
+# data_dir=/projects/academic/cwx/euroc/MH_01_easy/mav0
+data_dir=$1
 
 loss_weight='(4,0.1,2,0.1)'
 rot_w=1
 trans_w=0.1
 batch_size=8
 lr=3e-6
-epoch=1
+epoch=13
 train_portion=1
 
 use_scale=true
@@ -46,10 +49,11 @@ else
     exp_type='stereo'
 fi
 
-project_name=test_euroc
+# project_name=test_euroc
+project_name=$2
 train_name=${rot_w}Ra_${trans_w}ta_delayOptm_lr=${lr}_${loss_weight}_${exp_type}
 
-echo "\n=============================================="
+echo "=============================================="
 echo "project name = ${project_name}"
 echo "train name = ${train_name}"
 echo "data dir = ${data_dir}"
@@ -60,7 +64,7 @@ mkdir -p train_results/${project_name}/${train_name}
 rm -r train_results_models/${project_name}/${train_name}
 mkdir -p train_results_models/${project_name}/${train_name}
 
-if [ "$use_scale" = true ]; then
+if [ "$use_scale" = false ]; then
     # mono: use gt scale
     python train.py \
         --result-dir train_results/${project_name}/${train_name} \

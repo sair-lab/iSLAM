@@ -27,6 +27,8 @@
 ###SBATCH --requeue
 
 
+conda activate iSLAM
+
 export CUDA_VISIBLE_DEVICES=1
 
 # data_dir=/user/taimengf/projects/cwx/tartanair/TartanAir/ocean/Hard/P001
@@ -53,7 +55,7 @@ project_name=test_tartanair
 # project_name=$2
 train_name=${rot_w}Ra_${trans_w}ta_delayOptm_lr=${lr}_${loss_weight}_${exp_type}
 
-echo "\n=============================================="
+echo "=============================================="
 echo "project name = ${project_name}"
 echo "train name = ${train_name}"
 echo "data dir = ${data_dir}"

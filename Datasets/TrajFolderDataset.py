@@ -554,8 +554,10 @@ class TrajFolderDataset(TrajFolderDatasetBase):
 
         res['datatype'] = self.datatype
 
+        res['motion'] = (pp.SE3(self.poses[i]).Inv() @ pp.SE3(self.poses[j])).numpy()
+
         if self.right2left_pose != None:
-            res['extrinsic'] = self.right2left_pose.Log().numpy()
+            res['extrinsic'] = self.right2left_pose.clone().numpy()
 
         return res
     
