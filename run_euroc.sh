@@ -32,6 +32,7 @@ conda activate iSLAM
 # export CUDA_VISIBLE_DEVICES=1
 
 # data_dir=/projects/academic/cwx/euroc/MH_01_easy/mav0
+# data_dir=/home/data2/euroc_raw/MH_01_easy/mav0
 data_dir=$1
 
 loss_weight='(4,0.1,2,0.1)'

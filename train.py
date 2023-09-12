@@ -12,7 +12,7 @@ from loop_closure import LoopClosure
 
 import torch
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 
 import pypose as pp
 import numpy as np
@@ -34,12 +34,13 @@ def init_epoch():
     dataiter = iter(dataloader)
 
     # init lists for recording trajectories
-    global vo_motions_list, vo_poses_list, pgo_motions_list, pgo_poses_list, pgo_vels_list
+    global vo_motions_list, vo_poses_list, pgo_motions_list, pgo_poses_list, pgo_vels_list, imu_poses_list
     vo_motions_list = []
     vo_poses_list = [np.concatenate((init_state['pos'], init_state['rot']))]
     pgo_motions_list = []
     pgo_poses_list = [np.concatenate((init_state['pos'], init_state['rot']))]
     pgo_vels_list = [init_state['vel']]
+    imu_poses_list = [np.concatenate((init_state['pos'], init_state['rot']))]
 
     global keyframes
     keyframes = None
@@ -57,6 +58,7 @@ def snapshot(final=False):
     np.savetxt('{}/{}/pgo_pose.txt'.format(trainroot, epoch), np.stack(pgo_poses_list))
     np.savetxt('{}/{}/pgo_motion.txt'.format(trainroot, epoch), np.stack(pgo_motions_list))
     np.savetxt('{}/{}/pgo_vel.txt'.format(trainroot, epoch), np.stack(pgo_vels_list))
+    np.savetxt('{}/{}/imu_pose.txt'.format(trainroot, epoch), np.stack(imu_poses_list))
 
     if not args.use_gt_scale and args.enable_mapping:
         mapper.save_data('{}/{}/cloud.txt'.format(trainroot, epoch))
@@ -236,6 +238,7 @@ if __name__ == '__main__':
 
         imu_trans, imu_rots, imu_covs, imu_vels = imu_module.integrate(st, end, init_state, motion_mode=False)
         imu_poses = pp.SE3(torch.cat((imu_trans, imu_rots.tensor()), axis=1))
+        imu_poses_list.extend(imu_poses[1:].numpy())
 
         imu_dtrans, imu_drots, imu_dcovs, imu_dvels = imu_module.integrate(st, end, init_state, motion_mode=True)
 

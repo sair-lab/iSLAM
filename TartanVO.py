@@ -93,94 +93,93 @@ class TartanVO(nn.Module):
 
 
     def forward(self, sample, is_train=True):
-
-        ############################## init inputs ######################################################################   
-        nb = True
-        img0 = sample['img0'].cuda(self.device_id, non_blocking=nb)
-        img1 = sample['img1'].cuda(self.device_id, non_blocking=nb)
-        intrinsic = sample['intrinsic'].cuda(self.device_id, non_blocking=nb)
-
-        img0_norm = sample['img0_norm'].cuda(self.device_id, non_blocking=nb)
-        img0_r_norm = sample['img0_r_norm'].cuda(self.device_id, non_blocking=nb)
-        intrinsic_calib = sample['intrinsic_calib']
-        baseline = torch.linalg.norm(sample['extrinsic'][:, :3], dim=1)
-        precalc_flow = sample['flow'] if 'flow' in sample else None
-
         self.vonet.train() if is_train else self.vonet.eval()
-        _ = torch.set_grad_enabled(is_train)
+        with torch.set_grad_enabled(is_train):
 
-        ############################## forward vonet ######################################################################   
-        flow, disp, pose = self.vonet(img0, img1, img0_norm, img0_r_norm, intrinsic)
-        pose = pose * self.pose_std # The output is normalized during training, now scale it back
+            ############################## init inputs ######################################################################   
+            nb = True
+            img0 = sample['img0'].cuda(self.device_id, non_blocking=nb)
+            img1 = sample['img1'].cuda(self.device_id, non_blocking=nb)
+            intrinsic = sample['intrinsic'].cuda(self.device_id, non_blocking=nb)
 
-        if not self.correct_scale:
-            ############################## recover scale from stereo ######################################################################   
-            
-            if precalc_flow is None:
-                flow *= 5   # scale flow pridiction to pixel level
+            img0_norm = sample['img0_norm'].cuda(self.device_id, non_blocking=nb)
+            img0_r_norm = sample['img0_r_norm'].cuda(self.device_id, non_blocking=nb)
+            intrinsic_calib = sample['intrinsic_calib']
+            baseline = torch.linalg.norm(sample['extrinsic'][:, :3], dim=1)
+            precalc_flow = sample['flow'] if 'flow' in sample else None
+
+            ############################## forward vonet ######################################################################   
+            flow, disp, pose = self.vonet(img0, img1, img0_norm, img0_r_norm, intrinsic)
+            pose = pose * self.pose_std # The output is normalized during training, now scale it back
+
+            if not self.correct_scale:
+                ############################## recover scale from stereo ######################################################################   
+                
+                if precalc_flow is None:
+                    flow *= 5   # scale flow pridiction to pixel level
+                else:
+                    flow = precalc_flow
+                
+                disp *= 50/4    # scale disparity pridiction to pixel level
+
+                # img0_warp = warp_images('temp', img1, flow)
+                # save_images('temp', img0, prefix='', suffix='_orig', fx=1/4, fy=1/4)
+                # save_images('temp', img1, prefix='', suffix='_x', fx=1/4, fy=1/4)
+
+                # img0_r = sample['img0_r']
+                # disp_warp = warp_images('temp2', img0_r, -disp)
+                # save_images('temp2', img0, prefix='', suffix='_orig', fx=1/4, fy=1/4)
+                # save_images('temp2', img0_r, prefix='', suffix='_x', fx=1/4, fy=1/4)
+
+                # print('flow', torch.min(flow), torch.max(flow), torch.mean(flow))
+                # print('disp', torch.min(disp), torch.max(disp), torch.mean(disp), torch.median(disp))
+                
+                pose_ENU_SE3 = tartan2kitti_pypose(pose)    # convert to ENU coordinate
+
+                ############################## detect edges as mask ######################################################################   
+                img0_np = img0.cpu().numpy()
+                img0_np = img0_np.transpose(0, 2, 3, 1)
+                img0_np = (img0_np*255).astype(np.uint8)
+                edge = []
+                for i in range(img0_np.shape[0]):
+                    im = cv2.resize(img0_np[i], None, fx=1/4, fy=1/4)
+                    e = cv2.Canny(im, 50, 100)
+                    e = cv2.dilate(e, np.ones((5,5), np.uint8))
+                    e = e > 0
+                    edge.append(e)
+                edge = torch.from_numpy(np.stack(edge)).cuda(self.device_id)
+
+                ############################## calculate scale ######################################################################   
+                scale = []
+                mask = []
+                depth = []
+                for i in range(pose.shape[0]):
+                    fx, fy, cx, cy = intrinsic_calib[i] / 4
+                    disp_th_dict = {'kitti':5, 'tartanair':1, 'euroc':1}
+                    s, z, m = scale_from_disp_flow(disp[i], flow[i], pose_ENU_SE3[i], fx, fy, cx, cy, baseline[i], 
+                                                    mask=edge[i], disp_th=disp_th_dict[sample['datatype'][i]])
+                    scale.append(s)
+                    mask.append(m)
+                    depth.append(z)
+                scale = torch.stack(scale)
+                mask = torch.stack(mask)
+                depth = torch.stack(depth)
+                
+                trans = torch.nn.functional.normalize(pose[:, :3], dim=1) * scale.view(-1, 1)
+                pose = torch.cat([trans, pose[:, 3:]], dim=1)
+                
             else:
-                flow = precalc_flow
-            
-            disp *= 50/4    # scale disparity pridiction to pixel level
+                ############################## recover scale from GT ######################################################################   
+                motion_tar = sample['motion']
+                scale = torch.norm(motion_tar[:, :3], dim=1).cuda(self.device_id)
 
-            # img0_warp = warp_images('temp', img1, flow)
-            # save_images('temp', img0, prefix='', suffix='_orig', fx=1/4, fy=1/4)
-            # save_images('temp', img1, prefix='', suffix='_x', fx=1/4, fy=1/4)
+                trans = torch.nn.functional.normalize(pose[:, :3], dim=1) * scale.view(-1,1)
+                pose = torch.cat([trans, pose[:, 3:]], dim=1)
 
-            # img0_r = sample['img0_r']
-            # disp_warp = warp_images('temp2', img0_r, -disp)
-            # save_images('temp2', img0, prefix='', suffix='_orig', fx=1/4, fy=1/4)
-            # save_images('temp2', img0_r, prefix='', suffix='_x', fx=1/4, fy=1/4)
+            pose = tartan2kitti_pypose(pose)
+            pose = self.T_body_cam @ pose @ self.T_body_cam.Inv()
 
-            # print('flow', torch.min(flow), torch.max(flow), torch.mean(flow))
-            # print('disp', torch.min(disp), torch.max(disp), torch.mean(disp), torch.median(disp))
-            
-            pose_ENU_SE3 = tartan2kitti_pypose(pose)    # convert to ENU coordinate
-
-            ############################## detect edges as mask ######################################################################   
-            img0_np = img0.cpu().numpy()
-            img0_np = img0_np.transpose(0, 2, 3, 1)
-            img0_np = (img0_np*255).astype(np.uint8)
-            edge = []
-            for i in range(img0_np.shape[0]):
-                im = cv2.resize(img0_np[i], None, fx=1/4, fy=1/4)
-                e = cv2.Canny(im, 50, 100)
-                e = cv2.dilate(e, np.ones((5,5), np.uint8))
-                e = e > 0
-                edge.append(e)
-            edge = torch.from_numpy(np.stack(edge)).cuda(self.device_id)
-
-            ############################## calculate scale ######################################################################   
-            scale = []
-            mask = []
-            depth = []
-            for i in range(pose.shape[0]):
-                fx, fy, cx, cy = intrinsic_calib[i] / 4
-                disp_th_dict = {'kitti':5, 'tartanair':1, 'euroc':1}
-                s, z, m = scale_from_disp_flow(disp[i], flow[i], pose_ENU_SE3[i], fx, fy, cx, cy, baseline[i], 
-                                                mask=edge[i], disp_th=disp_th_dict[sample['datatype'][i]])
-                scale.append(s)
-                mask.append(m)
-                depth.append(z)
-            scale = torch.stack(scale)
-            mask = torch.stack(mask)
-            depth = torch.stack(depth)
-            
-            trans = torch.nn.functional.normalize(pose[:, :3], dim=1) * scale.view(-1, 1)
-            pose = torch.cat([trans, pose[:, 3:]], dim=1)
-            
-        else:
-            ############################## recover scale from GT ######################################################################   
-            motion_tar = sample['motion']
-            scale = torch.norm(motion_tar[:, :3], dim=1).cuda(self.device_id)
-
-            trans = torch.nn.functional.normalize(pose[:, :3], dim=1) * scale.view(-1,1)
-            pose = torch.cat([trans, pose[:, 3:]], dim=1)
-
-        pose = tartan2kitti_pypose(pose)
-        pose = self.T_body_cam @ pose @ self.T_body_cam.Inv()
-
-        return pose
+            return pose
 
 
     def pred_flow(self, img0, img1):
