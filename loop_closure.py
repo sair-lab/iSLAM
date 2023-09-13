@@ -52,6 +52,12 @@ class LoopClosure:
         self.batch_size = batch_size
 
     def forward_vo_on_loops(self, tartanvo):
+        # for debug, use gt poses
+        if True:
+            poses = pp.SE3(dataset.poses)
+            motions = poses[self.loop_edges[:, 0]].Inv() @ poses[self.loop_edges[:, 1]]
+            return motions
+
         loop_dataloader = DataLoader(self.loop_dataset, batch_size=self.batch_size, shuffle=False, drop_last=False)
         
         loop_motions_list = []

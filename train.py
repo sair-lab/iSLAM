@@ -130,7 +130,7 @@ if __name__ == '__main__':
     imu_module = IMUModule(
         dataset.accels, dataset.gyros, dataset.imu_dts,
         dataset.imu_init, dataset.gravity, dataset.rgb2imu_sync, 
-        device='cuda'
+        device='cuda', use_denoiser=False
     )
 
     ############################## init loop closure ######################################################################
