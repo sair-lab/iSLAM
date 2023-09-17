@@ -73,6 +73,7 @@ class TartanAirTrajFolderLoader:
         self.rgbfiles = [(imgfolder +'/'+ ff) for ff in files if (ff.endswith('.png') or ff.endswith('.jpg'))]
         self.rgbfiles.sort()
         self.rgb_dts = np.ones(len(self.rgbfiles), dtype=np.float32) * 0.1
+        self.rgb_ts = np.array([i for i in range(len(self.rgbfiles))], dtype=np.float64) * 0.1
 
         ############################## load stereo right images ######################################################################
         if isdir(datadir + '/image_right'):
@@ -117,8 +118,8 @@ class TartanAirTrajFolderLoader:
         ############################## load imu data ######################################################################
         if isdir(datadir + '/imu'):
         # if False:
-            dt = 0.1
-            self.imu_dts = np.ones(len(self.rgbfiles), dtype=np.float32) * dt
+            self.imu_dts = np.ones(len(self.rgbfiles), dtype=np.float32) * 0.1
+            self.imu_ts = np.array([i for i in range(len(self.rgbfiles))], dtype=np.float64) * 0.1
             self.rgb2imu_sync = np.array([i for i in range(len(self.rgbfiles))])
 
             self.rgb2imu_pose = pp.SE3([0, 0, 0,   0, 0, 0, 1]).to(dtype=torch.float32)
@@ -136,8 +137,8 @@ class TartanAirTrajFolderLoader:
             self.has_imu = True
 
         else:
-            dt = 0.1
-            self.imu_dts = np.ones(len(self.rgbfiles), dtype=np.float32) * dt
+            self.imu_dts = np.ones(len(self.rgbfiles), dtype=np.float32) * 0.1
+            self.imu_ts = np.array([i for i in range(len(self.rgbfiles))], dtype=np.float64) * 0.1
             self.rgb2imu_sync = np.array([i for i in range(len(self.rgbfiles))])
 
             self.rgb2imu_pose = pp.SE3([0, 0, 0,   0, 0, 0, 1]).to(dtype=torch.float32)
@@ -258,6 +259,7 @@ class EuRoCTrajFolderLoader:
         timestamps = np.array(list(timestamps))
         timestamps.sort()
         self.rgb_dts = np.diff(timestamps).astype(np.float32) * 1e-3
+        self.rgb_ts = timestamps.astype(np.float64) * 1e-3
 
         ############################## load imu data ######################################################################
         if isfile(datadir + '/imu0/data.csv'):
@@ -275,6 +277,7 @@ class EuRoCTrajFolderLoader:
             self.gyro_bias = gyro_bias[imu2pose_sync]
 
             self.imu_dts = np.diff(timestamps_imu).astype(np.float32) * 1e-3
+            self.imu_ts = timestamps_imu.astype(np.float64) * 1e-3
             
             self.rgb2imu_sync = sync_data(timestamps_imu, timestamps)
 
@@ -338,6 +341,7 @@ class KITTITrajFolderLoader:
         ############################## load images ######################################################################
         self.rgbfiles = dataset.cam2_files
         self.rgb_dts = np.diff(ts_rgb).astype(np.float32)
+        self.rgb_ts = ts_rgb.astype(np.float64)
 
         ############################## load stereo right images ######################################################################
         self.rgbfiles_right = dataset.cam3_files
@@ -374,6 +378,7 @@ class KITTITrajFolderLoader:
         self.gyros = np.array([[oxts_frame.packet.wx, oxts_frame.packet.wy, oxts_frame.packet.wz] for oxts_frame in dataset.oxts])
 
         self.imu_dts = np.diff(ts_imu).astype(np.float32)
+        self.imu_ts = ts_imu.astype(np.float64)
 
         T_IL = np.linalg.inv(T_LI)
         self.rgb2imu_pose = pp.from_matrix(torch.tensor(T_IL), ltype=pp.SE3_type).to(dtype=torch.float32)
@@ -425,6 +430,7 @@ class TrajFolderDatasetBase(Dataset):
         
         self.rgbfiles = loader.rgbfiles[start_frame:end_frame]
         self.rgb_dts = loader.rgb_dts[start_frame:end_frame-1]
+        self.rgb_ts = loader.rgb_ts[start_frame:end_frame]
         self.num_img = len(self.rgbfiles)
 
         try:
@@ -465,6 +471,7 @@ class TrajFolderDatasetBase(Dataset):
             self.accels = loader.accels[start_imu:end_imu]
             self.gyros = loader.gyros[start_imu:end_imu]
             self.imu_dts = loader.imu_dts[start_imu:end_imu-1]
+            self.imu_ts = loader.imu_ts[start_imu:end_imu]
             
             self.rgb2imu_pose = loader.rgb2imu_pose
             self.imu_init = {'rot':self.poses[0, 3:], 'pos':self.poses[0, :3], 'vel':self.vels[0]}

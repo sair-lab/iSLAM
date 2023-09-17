@@ -29,14 +29,23 @@ def gt_pose_loop_detector(poses, min_loop, trans_th, rot_th):
 
 
 class LoopClosure:
-    def __init__(self, dataset, batch_size, loop_edges_file=None):
+    def __init__(self, dataset, batch_size, loop_edges_file=None, loop_motions_file=None):
         motions = cvtSE3_pypose(dataset.motions)
         rot_mag = torch.norm(motions.rotation().Log(), dim=1)
         trans_mag = torch.norm(motions.translation(), dim=1)
 
         if loop_edges_file is not None:
-            self.loop_edges = np.loadtxt(loop_edges_file, dtype=int)
-            self.loop_edges = torch.tensor(self.loop_edges).view(-1, 2)
+            # self.loop_edges = np.loadtxt(loop_edges_file, dtype=int)
+            # self.loop_edges = torch.tensor(self.loop_edges).view(-1, 2)
+            loop_ts = np.loadtxt(loop_edges_file).reshape(-1, 4)[:, 2:4]
+            loop_ts = (loop_ts * 1e3).astype(int)
+            rgb_ts = (dataset.rgb_ts * 1e3).astype(int)
+            self.loop_edges = np.searchsorted(rgb_ts, loop_ts)
+            self.loop_edges = torch.tensor(self.loop_edges)
+
+            loop_motions = np.loadtxt(loop_motions_file).reshape(-1, 7)
+            loop_motions = pp.SE3(loop_motions)
+            self.precalc_loop_motions = dataset.rgb2imu_pose @ loop_motions @ dataset.rgb2imu_pose.Inv()
         else:
             min_loop = batch_size * 10
             rot_th = torch.max(rot_mag)
@@ -52,12 +61,6 @@ class LoopClosure:
         self.batch_size = batch_size
 
     def forward_vo_on_loops(self, tartanvo):
-        # for debug, use gt poses
-        if True:
-            poses = pp.SE3(dataset.poses)
-            motions = poses[self.loop_edges[:, 0]].Inv() @ poses[self.loop_edges[:, 1]]
-            return motions
-
         loop_dataloader = DataLoader(self.loop_dataset, batch_size=self.batch_size, shuffle=False, drop_last=False)
         
         loop_motions_list = []
@@ -67,7 +70,7 @@ class LoopClosure:
 
         return pp.SE3(torch.stack(loop_motions_list))
     
-    def perform(self, tartanvo, poses):
+    def perform(self, poses, tartanvo=None):
         keyframes = set([i for i in range(0, len(poses), self.batch_size)])
         keyframes = keyframes.union(set(self.loop_edges.view(-1).tolist()))
         keyframes = list(keyframes)
@@ -81,7 +84,17 @@ class LoopClosure:
 
         keyframe_poses = poses[keyframes]
         path_motions = pose2motion_pypose(keyframe_poses)
-        loop_motions = self.forward_vo_on_loops(tartanvo)
+
+        loop_motion_mode = 'pre'
+        if loop_motion_mode == 'vo':
+            loop_motions = self.forward_vo_on_loops(tartanvo)
+        elif loop_motion_mode == 'gt':
+            # for debug, use gt poses
+            gt_poses = pp.SE3(self.loop_dataset.poses)
+            loop_motions = gt_poses[self.loop_edges[:, 0]].Inv() @ gt_poses[self.loop_edges[:, 1]]
+        elif loop_motion_mode == 'pre':
+            loop_motions = self.precalc_loop_motions
+
         motions = torch.cat([path_motions, loop_motions], dim=0)
 
         loopclosure_poses = run_pgo(keyframe_poses, motions, links, 'cuda')

@@ -85,6 +85,8 @@ if __name__ == '__main__':
     print(args)
     print('==============================================\n')
 
+    trainroot = args.result_dir
+
     ############################## init dataset ######################################################################   
     timer.tic('dataset')
     print('Loading dataset ...')
@@ -136,20 +138,33 @@ if __name__ == '__main__':
     ############################## init loop closure ######################################################################
     if dataset.datatype == 'kitti':
         idx = kitti_raw2odometry(dataset.datadir)
-        loop_edges_file = f'./loop_edges/result_kitti{idx}/loop_final.txt'
+        loop_edges_file = f'./loop_edges/result_kitti{idx}/loop_ransac.txt'
+        loop_motions_file = f'./loop_edges/result_kitti{idx}/loop_ransac_motion.txt'
     elif dataset.datatype == 'euroc':
         idx = euroc_raw2short(dataset.datadir)
-        loop_edges_file = f'./loop_edges/result_euroc-{idx}/loop_final.txt'
+        loop_edges_file = f'./loop_edges/result_euroc-{idx}/loop_ransac.txt'
+        loop_motions_file = f'./loop_edges/result_euroc-{idx}/loop_ransac_motion.txt'
     if isfile(loop_edges_file):
-        loop_closure = LoopClosure(dataset, args.batch_size, loop_edges_file)
+        loop_closure = LoopClosure(dataset, args.batch_size, loop_edges_file, loop_motions_file)
     else:
         loop_closure = None
 
+    # for debug, output edge figures
+    if loop_closure is not None:
+        for l in loop_closure.loop_edges:
+            s = dataset.get_pair(l[0], l[1])
+            img0 = s['img0'].permute(1, 2, 0).numpy()
+            img1 = s['img1'].permute(1, 2, 0).numpy()
+            img0 = (img0 * 255).astype(np.uint8)
+            img1 = (img1 * 255).astype(np.uint8)
+            cv2.imwrite(trainroot+'/'+str(l[0].item())+'.png', img0)
+            cv2.imwrite(trainroot+'/'+str(l[1].item())+'.png', img1)
+
     ############################## logs before running ######################################################################
-    trainroot = args.result_dir
     with open(trainroot+'/args.txt', 'w') as f:
         f.write(str(args))
     np.savetxt(trainroot+'/gt_pose.txt', dataset.poses)
+    np.savetxt(trainroot+'/timestamp.txt', dataset.rgb_ts, fmt='%.3f')
 
     ############################## init before loop ######################################################################
     epoch = args.start_epoch
