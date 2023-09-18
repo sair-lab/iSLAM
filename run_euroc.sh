@@ -50,7 +50,7 @@ else
     exp_type='stereo'
 fi
 
-project_name=test_euroc_loop
+project_name=test_euroc_loop1-5
 # project_name=$2
 train_name=${rot_w}Ra_${trans_w}ta_delayOptm_lr=${lr}_${loss_weight}_${exp_type}
 
