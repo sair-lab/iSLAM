@@ -259,7 +259,7 @@ class EuRoCTrajFolderLoader:
         timestamps = np.array(list(timestamps))
         timestamps.sort()
         self.rgb_dts = np.diff(timestamps).astype(np.float32) * 1e-3
-        self.rgb_ts = timestamps.astype(np.float64) * 1e-3
+        self.rgb_ts = np.array(timestamps).astype(np.float64) * 1e-3
 
         ############################## load imu data ######################################################################
         if isfile(datadir + '/imu0/data.csv'):
@@ -277,7 +277,7 @@ class EuRoCTrajFolderLoader:
             self.gyro_bias = gyro_bias[imu2pose_sync]
 
             self.imu_dts = np.diff(timestamps_imu).astype(np.float32) * 1e-3
-            self.imu_ts = timestamps_imu.astype(np.float64) * 1e-3
+            self.imu_ts = np.array(timestamps_imu).astype(np.float64) * 1e-3
             
             self.rgb2imu_sync = sync_data(timestamps_imu, timestamps)
 
