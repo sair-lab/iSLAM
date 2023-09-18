@@ -201,7 +201,7 @@ if __name__ == '__main__':
             # loop closure
             if loop_closure is not None:
                 loopclosure_poses, keyframes, loop_edges, loop_motions = \
-                    loop_closure.perform(tartanvo, pp.SE3(pgo_poses_list))
+                    loop_closure.perform(pp.SE3(pgo_poses_list), tartanvo)
 
             snapshot(final=True)
 

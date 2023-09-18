@@ -18,7 +18,8 @@ data_name = [
 
 for dn in data_name:
     dir = data_root + dn + '/mav0'
-    cmd = "sbatch run_euroc.sh {} {}".format(dir, dn)
+    res_name = dn + '_loop'
+    cmd = "sbatch run_euroc.sh {} {}".format(dir, res_name)
 
     print('\n>>>>>', cmd, '<<<<<\n')
 
