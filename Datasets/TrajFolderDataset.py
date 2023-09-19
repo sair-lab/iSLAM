@@ -233,7 +233,7 @@ class EuRoCTrajFolderLoader:
             self.require_undistort = True
             img = cv2.imread(self.rgbfiles_right[0])
             h, w = img.shape[:2]
-            self.intrinsic, self.intrinsic_right, self.right2left_pose, self.imgmap, self.imgmap_right = stereo_rectify(
+            self.intrinsic, self.intrinsic_right, self.right2left_pose, self.imgmap, self.imgmap_right=stereo_rectify(
                 self.intrinsic, distortion, self.intrinsic_right, distortion_right, w, h, self.right2left_pose)
         else:
             self.require_undistort = False

@@ -31,8 +31,8 @@ conda activate iSLAM
 
 # export CUDA_VISIBLE_DEVICES=1
 
-# data_dir=/projects/academic/cwx/kitti_raw/2011_10_03/2011_10_03_drive_0034_sync
-data_dir=/home/data2/kitti_raw/2011_10_03/2011_10_03_drive_0027_sync
+data_dir=/projects/academic/cwx/kitti_raw/2011_10_03/2011_10_03_drive_0027_sync
+# data_dir=/home/data2/kitti_raw/2011_10_03/2011_10_03_drive_0027_sync
 # data_dir=$1
 
 loss_weight='(1,0.1,10,0.1)'
@@ -40,7 +40,7 @@ rot_w=1
 trans_w=0.1
 batch_size=8
 lr=3e-6
-epoch=13
+epoch=1
 train_portion=1
 
 use_scale=false
