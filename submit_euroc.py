@@ -1,6 +1,11 @@
 import os
 
-data_root = '/user/taimengf/projects/cwx/euroc/'
+machine = 'labserver'
+
+if machine == 'ccr':
+    data_root = '/user/taimengf/projects/cwx/euroc/'
+elif machine == 'labserver':
+    data_root = '/home/data2/euroc_raw/'
 
 data_name = [
     'MH_01_easy',
@@ -18,8 +23,12 @@ data_name = [
 
 for dn in data_name:
     dir = data_root + dn + '/mav0'
-    res_name = dn + '_loop'
-    cmd = "sbatch run_euroc.sh {} {}".format(dir, res_name)
+    res_name = dn + '_loop1-5'
+
+    if machine == 'ccr':
+        cmd = "sbatch run_euroc.sh {} {}".format(dir, res_name)
+    else:
+        cmd = "sh run_euroc.sh {} {}".format(dir, res_name)
 
     print('\n>>>>>', cmd, '<<<<<\n')
 

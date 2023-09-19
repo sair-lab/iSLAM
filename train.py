@@ -136,14 +136,15 @@ if __name__ == '__main__':
     )
 
     ############################## init loop closure ######################################################################
+    folder = 'loop_edges1-5'
     if dataset.datatype == 'kitti':
         idx = kitti_raw2odometry(dataset.datadir)
-        loop_edges_file = f'./loop_edges/result_kitti{idx}/loop_ransac.txt'
-        loop_motions_file = f'./loop_edges/result_kitti{idx}/loop_ransac_motion.txt'
+        loop_edges_file = f'./{folder}/result_kitti{idx}/loop_ransac.txt'
+        loop_motions_file = f'./{folder}/result_kitti{idx}/loop_ransac_motion.txt'
     elif dataset.datatype == 'euroc':
         idx = euroc_raw2short(dataset.datadir)
-        loop_edges_file = f'./loop_edges/result_euroc-{idx}/loop_ransac.txt'
-        loop_motions_file = f'./loop_edges/result_euroc-{idx}/loop_ransac_motion.txt'
+        loop_edges_file = f'./{folder}/result_euroc-{idx}/loop_ransac.txt'
+        loop_motions_file = f'./{folder}/result_euroc-{idx}/loop_ransac_motion.txt'
     if isfile(loop_edges_file):
         loop_closure = LoopClosure(dataset, args.batch_size, loop_edges_file, loop_motions_file)
     else:
