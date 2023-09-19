@@ -32,8 +32,8 @@ conda activate iSLAM
 # export CUDA_VISIBLE_DEVICES=1
 
 # data_dir=/projects/academic/cwx/kitti_raw/2011_10_03/2011_10_03_drive_0034_sync
-# data_dir=/home/data2/kitti_raw/2011_10_03/2011_10_03_drive_0027_sync
-data_dir=$1
+data_dir=/home/data2/kitti_raw/2011_10_03/2011_10_03_drive_0027_sync
+# data_dir=$1
 
 loss_weight='(1,0.1,10,0.1)'
 rot_w=1
@@ -50,8 +50,8 @@ else
     exp_type='stereo'
 fi
 
-# project_name=test_kitti
-project_name=$2
+project_name=test_kitti_loop
+# project_name=$2
 train_name=${rot_w}Ra_${trans_w}ta_delayOptm_lr=${lr}_${loss_weight}_${exp_type}
 
 echo "=============================================="

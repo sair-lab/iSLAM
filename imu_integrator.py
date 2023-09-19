@@ -90,7 +90,7 @@ class IMUModule:
                 data = {'acc':acc, 'gyro':gyro}
                 acc, gyro, acc_cov, gyro_cov = self.denoiser(data, eval=True)
 
-            if st == end:
+            if imu_st == imu_end:
                 dtype = self.accels.dtype
                 if motion_mode:
                     state['pos'] = torch.zeros((1, 3), dtype=dtype).to(self.device)
