@@ -552,10 +552,10 @@ class TrajFolderDataset(TrajFolderDatasetBase):
         intrinsicLayer = make_intrinsics_layer(w, h, self.intrinsic[0], self.intrinsic[1], self.intrinsic[2], self.intrinsic[3])
         res['intrinsic'] = [intrinsicLayer]
 
+        res['intrinsic_calib'] = self.intrinsic.copy()
+
         if self.transform:
             res = self.transform(res)
-
-        res['intrinsic_calib'] = self.intrinsic.copy()
 
         res['link'] = np.array([i, j])
 

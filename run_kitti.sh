@@ -40,7 +40,7 @@ rot_w=1
 trans_w=0.1
 batch_size=8
 lr=3e-6
-epoch=13
+epoch=1
 train_portion=1
 
 use_scale=false
