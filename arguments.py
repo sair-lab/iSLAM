@@ -51,6 +51,8 @@ def get_args():
                         help='enable mapping, generate point cloud (default: "False")')
     parser.add_argument('--start-epoch', type=int, default=1,
                         help='start epoch (default: 1)')
+    parser.add_argument('--vo-reverse-edge', action='store_true', default=False,
+                        help='use vo reverse edge in pvgo (default: False)')
 
     args = parser.parse_args()
     args.loss_weight = eval(args.loss_weight)   # string to tuple

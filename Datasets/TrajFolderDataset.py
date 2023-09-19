@@ -545,8 +545,11 @@ class TrajFolderDataset(TrajFolderDatasetBase):
 
         if self.rgbfiles_right is not None:
             img0_r = cv2.imread(self.rgbfiles_right[i], cv2.IMREAD_COLOR)
+            img1_r = cv2.imread(self.rgbfiles_right[j], cv2.IMREAD_COLOR)
             img0_r = self.undistort(img0_r, True)
+            img1_r = self.undistort(img1_r, True)
             res['img0_r'] = [img0_r]
+            res['img1_r'] = [img1_r]
 
         h, w, _ = img0.shape
         intrinsicLayer = make_intrinsics_layer(w, h, self.intrinsic[0], self.intrinsic[1], self.intrinsic[2], self.intrinsic[3])

@@ -4,7 +4,7 @@ machine = 'labserver'
 
 if machine == 'ccr':
     data_root = '/user/taimengf/projects/cwx/kitti_raw/'
-elif machine == 'labserver'
+elif machine == 'labserver':
     # 10Hz IMU !!!
     data_root = '/home/data2/kitti_raw'
 
@@ -24,7 +24,7 @@ data_name = [
 for dn in data_name:
     date = dn[:10]
     dir = data_root + date + '/' + dn + '_sync'
-    res_name = dn + '_loop1-5'
+    res_name = dn + '_loop1-5_rev'
 
     if machine == 'ccr':
         cmd = "sbatch run_kitti.sh {} {}".format(dir, res_name)

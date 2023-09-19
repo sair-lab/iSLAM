@@ -134,9 +134,5 @@ def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtran
     nodes, vels = graph.align_to(init_nodes[0].to(device))
     nodes = nodes.detach().cpu()
     vels = vels.detach().cpu()
-    
-    # calc motions
-    edges = edges.cpu()
-    motions = nodes[edges[:, 0]].Inv() @ nodes[edges[:, 1]]
 
-    return trans_loss, rot_loss, nodes, vels, motions
+    return trans_loss, rot_loss, nodes, vels

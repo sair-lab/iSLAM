@@ -72,6 +72,15 @@ def snapshot(final=False):
             np.savetxt('{}/{}/loop_motion.txt'.format(trainroot, epoch), loop_motions.numpy())
 
 
+def reverse_sample(sample):
+    res = sample.copy()
+    res['img0'], res['img1'] = res['img1'], res['img0']
+    res['img0_r'], res['img1_r'] = res['img1_r'], res['img0_r']
+    res['link'] = res['link'][:, (1,0)]
+    res['motion'] = pp.SE3(res['motion']).Inv().tensor()
+    return res
+
+
 if __name__ == '__main__':
 
     start_time = time.time()
@@ -214,6 +223,10 @@ if __name__ == '__main__':
         ############################## forward VO ######################################################################
         timer.tic('vo')
         motions = tartanvo(sample)
+        
+        if args.vo_reverse_edge:
+            sample_rev = reverse_sample(sample)
+            motions_rev = tartanvo(sample_rev)
         timer.toc('vo')
 
         # batch_motion_se3 = pp.cumprod(motions, dim=0)[-1].Log()
@@ -266,6 +279,10 @@ if __name__ == '__main__':
         dts = sample['dt']
         links = sample['link'] - current_idx
 
+        if args.vo_reverse_edge:
+            motions = torch.cat([motions, motions_rev], dim=0)
+            links = torch.cat([links, links[:, (1,0)]], dim=0)
+
         if keyframes is not None:
             a = torch.searchsorted(keyframes, current_idx, right=False)
             b = torch.searchsorted(keyframes, current_idx+args.batch_size, right=True)
@@ -275,13 +292,14 @@ if __name__ == '__main__':
                 motions = torch.cat([motions, loop_motions.to(motions.device)], dim=0)
                 links = torch.cat([links, loop_links], dim=0)
 
-        trans_loss, rot_loss, pgo_poses, pgo_vels, pgo_motions = run_pvgo(
+        trans_loss, rot_loss, pgo_poses, pgo_vels = run_pvgo(
             imu_poses, imu_vels,
             motions, links, dts,
             imu_drots, imu_dtrans, imu_dvels,
             device='cuda', radius=1e4,
             loss_weight=args.loss_weight
         )
+        pgo_motions = pose2motion_pypose(pgo_poses)
 
         pgo_motions = pgo_motions.numpy()
         pgo_poses = pgo_poses.numpy()

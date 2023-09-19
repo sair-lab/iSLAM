@@ -50,7 +50,7 @@ else
     exp_type='stereo'
 fi
 
-# project_name=test_euroc_loop
+# project_name=test_euroc_rev
 project_name=$2
 train_name=${rot_w}Ra_${trans_w}ta_delayOptm_lr=${lr}_${loss_weight}_${exp_type}
 
@@ -88,7 +88,8 @@ if [ "$use_scale" = false ]; then
         --rot-w ${rot_w} \
         --trans-w ${trans_w} \
         --train-portion ${train_portion} \
-        --use-gt-scale
+        --use-gt-scale \
+        --vo-reverse-edge
 else
     # stereo: calc scale
     python train.py \
@@ -111,5 +112,6 @@ else
         --fix-model-parts 'flow' 'stereo' \
         --rot-w ${rot_w} \
         --trans-w ${trans_w} \
-        --train-portion ${train_portion}
+        --train-portion ${train_portion} \
+        --vo-reverse-edge
 fi
