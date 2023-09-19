@@ -34,13 +34,16 @@ def init_epoch():
     dataiter = iter(dataloader)
 
     # init lists for recording trajectories
-    global vo_motions_list, vo_poses_list, pgo_motions_list, pgo_poses_list, pgo_vels_list, imu_poses_list
+    global vo_motions_list, vo_poses_list, pgo_motions_list, pgo_poses_list, pgo_vels_list
     vo_motions_list = []
     vo_poses_list = [np.concatenate((init_state['pos'], init_state['rot']))]
     pgo_motions_list = []
     pgo_poses_list = [np.concatenate((init_state['pos'], init_state['rot']))]
     pgo_vels_list = [init_state['vel']]
+
+    global imu_poses_list, vo_rev_poses_list
     imu_poses_list = [np.concatenate((init_state['pos'], init_state['rot']))]
+    vo_rev_poses_list = [np.concatenate((init_state['pos'], init_state['rot']))]
 
     global keyframes
     keyframes = None
@@ -59,6 +62,7 @@ def snapshot(final=False):
     np.savetxt('{}/{}/pgo_motion.txt'.format(trainroot, epoch), np.stack(pgo_motions_list))
     np.savetxt('{}/{}/pgo_vel.txt'.format(trainroot, epoch), np.stack(pgo_vels_list))
     np.savetxt('{}/{}/imu_pose.txt'.format(trainroot, epoch), np.stack(imu_poses_list))
+    np.savetxt('{}/{}/vo_rev_pose.txt'.format(trainroot, epoch), np.stack(vo_rev_poses_list))
 
     if not args.use_gt_scale and args.enable_mapping:
         mapper.save_data('{}/{}/cloud.txt'.format(trainroot, epoch))
@@ -76,6 +80,8 @@ def reverse_sample(sample):
     res = sample.copy()
     res['img0'], res['img1'] = res['img1'], res['img0']
     res['img0_r'], res['img1_r'] = res['img1_r'], res['img0_r']
+    res['img0_norm'], res['img1_norm'] = res['img1_norm'], res['img0_norm']
+    res['img0_r_norm'], res['img1_r_norm'] = res['img1_r_norm'], res['img0_r_norm']
     res['link'] = res['link'][:, (1,0)]
     res['motion'] = pp.SE3(res['motion']).Inv().tensor()
     return res
@@ -222,11 +228,11 @@ if __name__ == '__main__':
 
         ############################## forward VO ######################################################################
         timer.tic('vo')
-        motions = tartanvo(sample)
-        
         if args.vo_reverse_edge:
             sample_rev = reverse_sample(sample)
             motions_rev = tartanvo(sample_rev)
+
+        motions = tartanvo(sample)
         timer.toc('vo')
 
         # batch_motion_se3 = pp.cumprod(motions, dim=0)[-1].Log()
@@ -258,6 +264,10 @@ if __name__ == '__main__':
         poses_vo_np = poses_vo.detach().cpu().numpy()
         vo_motions_list.extend(motions_np)
         vo_poses_list.extend(poses_vo_np[1:])
+
+        T0_vo_rev = vo_rev_poses_list[-1]
+        poses_vo_rev = motion2pose_pypose(motions_rev[:args.batch_size].Inv(), T0_vo_rev)
+        vo_rev_poses_list.extend(poses_vo_rev.detach().cpu().numpy()[1:])
 
         ############################## IMU preintegration ######################################################################
         timer.tic('imu')
