@@ -17,16 +17,12 @@ np.set_printoptions(precision=4, suppress=True, threshold=10000)
 
 class TartanVO(nn.Module):
     def __init__(self, vo_model_name=None, pose_model_name=None, flow_model_name=None, stereo_model_name=None,
-                    device_id=0, correct_scale=True, fix_parts=(), T_body_cam=None):
+                    device_id=0, correct_scale=True, fix_parts=()):
         
         super(TartanVO, self).__init__()
         
         self.device_id = device_id
         self.correct_scale = correct_scale
-        if T_body_cam is None:
-            self.T_body_cam = pp.identity_SE3().cuda(self.device_id)
-        else:
-            self.T_body_cam = cvtSE3_pypose(T_body_cam).cuda(self.device_id)
         # the output scale factor
         self.pose_std = torch.tensor([0.13, 0.13, 0.13, 0.013, 0.013, 0.013]).cuda(self.device_id)
 
@@ -92,7 +88,7 @@ class TartanVO(nn.Module):
         return model
 
 
-    def forward(self, sample, is_train=True):
+    def forward(self, sample, is_train=True, given_scale=None):
         self.vonet.train() if is_train else self.vonet.eval()
         with torch.set_grad_enabled(is_train):
 
@@ -112,9 +108,13 @@ class TartanVO(nn.Module):
             flow, disp, pose = self.vonet(img0, img1, img0_norm, img0_r_norm, intrinsic)
             pose = pose * self.pose_std # The output is normalized during training, now scale it back
 
-            if not self.correct_scale:
+            if given_scale is not None:
+                trans = torch.nn.functional.normalize(pose[:, :3], dim=1) * given_scale.view(-1, 1)
+                pose = torch.cat([trans, pose[:, 3:]], dim=1)
+
+            elif not self.correct_scale:
                 ############################## recover scale from stereo ######################################################################   
-                
+
                 if precalc_flow is None:
                     flow *= 5   # scale flow pridiction to pixel level
                 else:
@@ -167,17 +167,18 @@ class TartanVO(nn.Module):
                 
                 trans = torch.nn.functional.normalize(pose[:, :3], dim=1) * scale.view(-1, 1)
                 pose = torch.cat([trans, pose[:, 3:]], dim=1)
+
+                print(torch.min(disp), torch.max(disp))
                 
             else:
                 ############################## recover scale from GT ######################################################################   
                 motion_tar = sample['motion']
                 scale = torch.norm(motion_tar[:, :3], dim=1).cuda(self.device_id)
 
-                trans = torch.nn.functional.normalize(pose[:, :3], dim=1) * scale.view(-1,1)
+                trans = torch.nn.functional.normalize(pose[:, :3], dim=1) * scale.view(-1, 1)
                 pose = torch.cat([trans, pose[:, 3:]], dim=1)
 
             pose = tartan2kitti_pypose(pose)
-            pose = self.T_body_cam @ pose @ self.T_body_cam.Inv()
 
             return pose
 

@@ -33,17 +33,20 @@ def init_epoch():
     init_state = dataset.imu_init
     dataiter = iter(dataloader)
 
+    init_pose = np.concatenate((init_state['pos'], init_state['rot']))
+
     # init lists for recording trajectories
     global vo_motions_list, vo_poses_list, pgo_motions_list, pgo_poses_list, pgo_vels_list
     vo_motions_list = []
-    vo_poses_list = [np.concatenate((init_state['pos'], init_state['rot']))]
+    vo_poses_list = [init_pose]
     pgo_motions_list = []
-    pgo_poses_list = [np.concatenate((init_state['pos'], init_state['rot']))]
+    pgo_poses_list = [init_pose]
     pgo_vels_list = [init_state['vel']]
 
-    global imu_poses_list, vo_rev_poses_list
-    imu_poses_list = [np.concatenate((init_state['pos'], init_state['rot']))]
-    vo_rev_poses_list = [np.concatenate((init_state['pos'], init_state['rot']))]
+    global imu_poses_list, vo_rev_poses_list, vo_rcam_poses_list
+    imu_poses_list = [init_pose]
+    vo_rev_poses_list = [init_pose]
+    vo_rcam_poses_list = [init_pose]
 
     global keyframes
     keyframes = None
@@ -62,7 +65,10 @@ def snapshot(final=False):
     np.savetxt('{}/{}/pgo_motion.txt'.format(trainroot, epoch), np.stack(pgo_motions_list))
     np.savetxt('{}/{}/pgo_vel.txt'.format(trainroot, epoch), np.stack(pgo_vels_list))
     np.savetxt('{}/{}/imu_pose.txt'.format(trainroot, epoch), np.stack(imu_poses_list))
-    np.savetxt('{}/{}/vo_rev_pose.txt'.format(trainroot, epoch), np.stack(vo_rev_poses_list))
+    if args.vo_reverse_edge:
+        np.savetxt('{}/{}/vo_rev_pose.txt'.format(trainroot, epoch), np.stack(vo_rev_poses_list))
+    if args.vo_right_cam:
+        np.savetxt('{}/{}/vo_rcam_pose.txt'.format(trainroot, epoch), np.stack(vo_rcam_poses_list))
 
     if not args.use_gt_scale and args.enable_mapping:
         mapper.save_data('{}/{}/cloud.txt'.format(trainroot, epoch))
@@ -76,14 +82,21 @@ def snapshot(final=False):
             np.savetxt('{}/{}/loop_motion.txt'.format(trainroot, epoch), loop_motions.numpy())
 
 
-def reverse_sample(sample):
+def reverse_sample(sample, left_right=False):
     res = sample.copy()
-    res['img0'], res['img1'] = res['img1'], res['img0']
-    res['img0_r'], res['img1_r'] = res['img1_r'], res['img0_r']
-    res['img0_norm'], res['img1_norm'] = res['img1_norm'], res['img0_norm']
-    res['img0_r_norm'], res['img1_r_norm'] = res['img1_r_norm'], res['img0_r_norm']
-    res['link'] = res['link'][:, (1,0)]
-    res['motion'] = pp.SE3(res['motion']).Inv().tensor()
+    if not left_right:
+        res['img0'], res['img1'] = res['img1'], res['img0']
+        res['img0_r'], res['img1_r'] = res['img1_r'], res['img0_r']
+        res['img0_norm'], res['img1_norm'] = res['img1_norm'], res['img0_norm']
+        res['img0_r_norm'], res['img1_r_norm'] = res['img1_r_norm'], res['img0_r_norm']
+        res['link'] = res['link'][:, (1,0)]
+        res['motion'] = pp.SE3(res['motion']).Inv().tensor()
+    else:
+        res['img0'], res['img0_r'] = res['img0_r'], res['img0']
+        res['img1'], res['img1_r'] = res['img1_r'], res['img1']
+        res['img0_norm'], res['img0_r_norm'] = res['img0_r_norm'], res['img0_norm']
+        res['img1_norm'], res['img1_r_norm'] = res['img1_r_norm'], res['img1_norm']
+        res['extrinsic'] = pp.SE3(res['extrinsic']).Inv().tensor()
     return res
 
 
@@ -128,13 +141,13 @@ if __name__ == '__main__':
     if args.start_epoch == 1:
         tartanvo = TartanVO(
             vo_model_name=args.vo_model_name, 
-            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts, T_body_cam=dataset.rgb2imu_pose
+            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts
         )
     else:
         last_pose_model_name = '{}/{}/vonet.pkl'.format(args.save_model_dir, args.start_epoch - 1)
         tartanvo = TartanVO(
             vo_model_name=args.vo_model_name, pose_model_name=last_pose_model_name, 
-            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts, T_body_cam=dataset.rgb2imu_pose
+            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts
         )
     if args.vo_optimizer == 'adam':
         vo_optimizer = optim.Adam(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
@@ -228,11 +241,23 @@ if __name__ == '__main__':
 
         ############################## forward VO ######################################################################
         timer.tic('vo')
-        if args.vo_reverse_edge:
-            sample_rev = reverse_sample(sample)
-            motions_rev = tartanvo(sample_rev)
 
         motions = tartanvo(sample)
+        T_IL = dataset.rgb2imu_pose.to(motions.device)
+        motions = T_IL @ motions @ T_IL.Inv()
+
+        if args.vo_reverse_edge:
+            sample_rev = reverse_sample(sample, False)
+            motions_rev = tartanvo(sample_rev)
+            motions_rev = T_IL @ motions_rev @ T_IL.Inv()
+
+        if args.vo_right_cam:
+            sample_rcam = reverse_sample(sample, True)
+            vo_scales = torch.norm(motions.translation(), dim=1)
+            motions_rcam = tartanvo(sample_rcam, given_scale=vo_scales)
+            T_IR = T_IL @ dataset.right2left_pose.to(T_IL.device)
+            motions_rcam = T_IR @ motions_rcam @ T_IR.Inv()
+
         timer.toc('vo')
 
         # batch_motion_se3 = pp.cumprod(motions, dim=0)[-1].Log()
@@ -265,9 +290,15 @@ if __name__ == '__main__':
         vo_motions_list.extend(motions_np)
         vo_poses_list.extend(poses_vo_np[1:])
 
-        T0_vo_rev = vo_rev_poses_list[-1]
-        poses_vo_rev = motion2pose_pypose(motions_rev[:args.batch_size].Inv(), T0_vo_rev)
-        vo_rev_poses_list.extend(poses_vo_rev.detach().cpu().numpy()[1:])
+        if args.vo_reverse_edge:
+            T0_vo_rev = vo_rev_poses_list[-1]
+            poses_vo_rev = motion2pose_pypose(motions_rev[:args.batch_size].Inv(), T0_vo_rev)
+            vo_rev_poses_list.extend(poses_vo_rev.detach().cpu().numpy()[1:])
+
+        if args.vo_right_cam:
+            T0_vo_rcam = vo_rcam_poses_list[-1]
+            poses_vo_rcam = motion2pose_pypose(motions_rcam[:args.batch_size], T0_vo_rcam)
+            vo_rcam_poses_list.extend(poses_vo_rcam.detach().cpu().numpy()[1:])
 
         ############################## IMU preintegration ######################################################################
         timer.tic('imu')
@@ -287,11 +318,19 @@ if __name__ == '__main__':
         timer.tic('pgo')
 
         dts = sample['dt']
-        links = sample['link'] - current_idx
+        links = base_links = sample['link'] - current_idx
 
         if args.vo_reverse_edge:
             motions = torch.cat([motions, motions_rev], dim=0)
-            links = torch.cat([links, links[:, (1,0)]], dim=0)
+            links = torch.cat([links, base_links[:, (1,0)]], dim=0)
+            # print(links)
+            # print(motions.shape)
+        
+        if args.vo_right_cam:
+            motions = torch.cat([motions, motions_rcam], dim=0)
+            links = torch.cat([links, base_links], dim=0)
+            # print(links)
+            # print(motions.shape)
 
         if keyframes is not None:
             a = torch.searchsorted(keyframes, current_idx, right=False)
@@ -301,6 +340,8 @@ if __name__ == '__main__':
                 loop_links = torch.tensor([[keyframes[i], keyframes[i+1]] for i in range(a, b-1)]) - current_idx
                 motions = torch.cat([motions, loop_motions.to(motions.device)], dim=0)
                 links = torch.cat([links, loop_links], dim=0)
+            # print(links)
+            # print(motions.shape)
 
         trans_loss, rot_loss, pgo_poses, pgo_vels = run_pvgo(
             imu_poses, imu_vels,

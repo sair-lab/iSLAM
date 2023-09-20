@@ -53,6 +53,8 @@ def get_args():
                         help='start epoch (default: 1)')
     parser.add_argument('--vo-reverse-edge', action='store_true', default=False,
                         help='use vo reverse edge in pvgo (default: False)')
+    parser.add_argument('--vo-right-cam', action='store_true', default=False,
+                        help='use right camera vo in pvgo (default: False)')
 
     args = parser.parse_args()
     args.loss_weight = eval(args.loss_weight)   # string to tuple
