@@ -1,12 +1,14 @@
 import os
 
-machine = 'labserver'
+machine = '4090'
 
 if machine == 'ccr':
-    data_root = '/user/taimengf/projects/cwx/kitti_raw/'
+    data_root = '/user/taimengf/projects/cwx/kitti_raw'
 elif machine == 'labserver':
     # 10Hz IMU !!!
     data_root = '/home/data2/kitti_raw'
+elif machine == '4090':
+    data_root = '/home/tymon/data/kitti'
 
 data_name = [
     '2011_10_03_drive_0027',
@@ -23,8 +25,8 @@ data_name = [
 
 for dn in data_name:
     date = dn[:10]
-    dir = data_root + date + '/' + dn + '_sync'
-    res_name = dn + '_loop1-5_rev'
+    dir = data_root + '/' + date + '/' + dn + '_sync'
+    res_name = dn + '_loop1-5_rcam'
 
     if machine == 'ccr':
         cmd = "sbatch run_kitti.sh {} {}".format(dir, res_name)

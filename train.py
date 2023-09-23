@@ -132,7 +132,8 @@ if __name__ == '__main__':
         datadir=args.data_root, datatype=args.data_type, transform=transform,
         start_frame=args.start_frame, end_frame=args.end_frame
     )
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, drop_last=True)
+    dataloader = DataLoader(dataset, batch_size=args.batch_size, num_workers=args.worker_num, 
+                            shuffle=False, drop_last=True)
 
     timer.toc('dataset')
     print('Load dataset time:', timer.tot('dataset'))
@@ -253,9 +254,10 @@ if __name__ == '__main__':
 
         if args.vo_right_cam:
             sample_rcam = reverse_sample(sample, True)
-            vo_scales = torch.norm(motions.translation(), dim=1)
-            motions_rcam = tartanvo(sample_rcam, given_scale=vo_scales)
             T_IR = T_IL @ dataset.right2left_pose.to(T_IL.device)
+            motions_in_rcam = T_IR.Inv() @ motions.detach() @ T_IR
+            scales_in_rcam = torch.norm(motions_in_rcam.translation(), dim=1)
+            motions_rcam = tartanvo(sample_rcam, given_scale=scales_in_rcam)
             motions_rcam = T_IR @ motions_rcam @ T_IR.Inv()
 
         timer.toc('vo')

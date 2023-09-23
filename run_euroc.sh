@@ -80,7 +80,7 @@ if [ "$use_scale" = false ]; then
         --end-frame -1 \
         --train-epoch ${epoch} \
         --print-interval 1 \
-        --snapshot-interval 10 \
+        --snapshot-interval 100 \
         --lr ${lr} \
         --loss-weight ${loss_weight} \
         --data-type euroc \
@@ -89,7 +89,7 @@ if [ "$use_scale" = false ]; then
         --trans-w ${trans_w} \
         --train-portion ${train_portion} \
         --use-gt-scale \
-        --vo-reverse-edge
+        --vo-right-cam
 else
     # stereo: calc scale
     python train.py \
@@ -105,7 +105,7 @@ else
         --end-frame -1 \
         --train-epoch ${epoch} \
         --print-interval 1 \
-        --snapshot-interval 10 \
+        --snapshot-interval 100 \
         --lr ${lr} \
         --loss-weight ${loss_weight} \
         --data-type euroc \
@@ -113,5 +113,5 @@ else
         --rot-w ${rot_w} \
         --trans-w ${trans_w} \
         --train-portion ${train_portion} \
-        --vo-reverse-edge
+        --vo-right-cam
 fi

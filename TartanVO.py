@@ -167,8 +167,6 @@ class TartanVO(nn.Module):
                 
                 trans = torch.nn.functional.normalize(pose[:, :3], dim=1) * scale.view(-1, 1)
                 pose = torch.cat([trans, pose[:, 3:]], dim=1)
-
-                print(torch.min(disp), torch.max(disp))
                 
             else:
                 ############################## recover scale from GT ######################################################################   
