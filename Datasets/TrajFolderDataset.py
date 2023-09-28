@@ -341,7 +341,7 @@ class KITTITrajFolderLoader:
         ############################## load images ######################################################################
         self.rgbfiles = dataset.cam2_files
         self.rgb_dts = np.diff(ts_rgb).astype(np.float32)
-        self.rgb_ts = np.array(ts_rgb).astype(np.float64)
+        self.rgb_ts = np.array(ts_rgb).astype(np.float64) - ts_rgb[0]
 
         ############################## load stereo right images ######################################################################
         self.rgbfiles_right = dataset.cam3_files
@@ -378,7 +378,7 @@ class KITTITrajFolderLoader:
         self.gyros = np.array([[oxts_frame.packet.wx, oxts_frame.packet.wy, oxts_frame.packet.wz] for oxts_frame in dataset.oxts])
 
         self.imu_dts = np.diff(ts_imu).astype(np.float32)
-        self.imu_ts = np.array(ts_imu).astype(np.float64)
+        self.imu_ts = np.array(ts_imu).astype(np.float64) - ts_imu[0]
 
         T_IL = np.linalg.inv(T_LI)
         self.rgb2imu_pose = pp.from_matrix(torch.tensor(T_IL), ltype=pp.SE3_type).to(dtype=torch.float32)

@@ -48,8 +48,9 @@ def init_epoch():
     vo_rev_poses_list = [init_pose]
     vo_rcam_poses_list = [init_pose]
 
-    global keyframes
+    global keyframes, covs_dict_list
     keyframes = None
+    covs_dict_list = {}
 
     global mapper
     mapper = Mapper()
@@ -73,6 +74,9 @@ def snapshot(final=False):
     if not args.use_gt_scale and args.enable_mapping:
         mapper.save_data('{}/{}/cloud.txt'.format(trainroot, epoch))
         mapper.write_ply('{}/{}/cloud.ply'.format(trainroot, epoch))
+
+    for k, v in covs_dict_list.items():
+        np.savetxt('{}/{}/info_{}.txt'.format(trainroot, epoch, k), np.stack(v))
 
     if final:
         if keyframes is not None:
@@ -310,6 +314,7 @@ if __name__ == '__main__':
 
         imu_trans, imu_rots, imu_covs, imu_vels = imu_module.integrate(st, end, init_state, motion_mode=False)
         imu_poses = pp.SE3(torch.cat((imu_trans, imu_rots.tensor()), axis=1))
+        imu_poses = pp.SE3(imu_poses_list[-1]) @ imu_poses[0].Inv() @ imu_poses
         imu_poses_list.extend(imu_poses[1:].numpy())
 
         imu_dtrans, imu_drots, imu_dcovs, imu_dvels = imu_module.integrate(st, end, init_state, motion_mode=True)
@@ -345,7 +350,7 @@ if __name__ == '__main__':
             # print(links)
             # print(motions.shape)
 
-        trans_loss, rot_loss, pgo_poses, pgo_vels = run_pvgo(
+        trans_loss, rot_loss, pgo_poses, pgo_vels, covs = run_pvgo(
             imu_poses, imu_vels,
             motions, links, dts,
             imu_drots, imu_dtrans, imu_dvels,
@@ -361,6 +366,11 @@ if __name__ == '__main__':
         pgo_motions_list.extend(pgo_motions)
         pgo_poses_list.extend(pgo_poses[1:])
         pgo_vels_list.extend(pgo_vels[1:])
+
+        for k in covs.keys():
+            if k not in covs_dict_list:
+                covs_dict_list[k] = []
+            covs_dict_list[k].extend(covs[k])
 
         timer.toc('pgo')
         

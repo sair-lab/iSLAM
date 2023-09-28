@@ -57,7 +57,7 @@ def scale_from_disp_flow(disp, flow, motion, fx, fy, cx, cy, baseline, depth=Non
 
         z = torch.where(depth_mask, depth, 0) 
 
-    if torch.sum(mask) < 1000:
+    if torch.sum(mask) < 500:
         print('Warning! mask contains too less points!', torch.sum(mask)) 
 
     # intrinsic matrix

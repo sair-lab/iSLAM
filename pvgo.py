@@ -1,7 +1,10 @@
 import time
+import numpy as np
 
 import torch
 from torch import nn
+
+from dataset_statistics import kitti_imu_func, kitti_vo_func
 
 import pypose as pp
 import pypose.optim.solver as ppos
@@ -12,19 +15,12 @@ from pypose.optim.scheduler import StopOnPlateau
 
  
 class PoseVelGraph(nn.Module):
-    def __init__(self, nodes, vels, loss_weight):
+    def __init__(self, nodes, vels):
         super().__init__()
 
         assert nodes.size(0) == vels.size(0)
         self.nodes = pp.Parameter(nodes.clone())
         self.vels = torch.nn.Parameter(vels.clone())
-
-        assert len(loss_weight) == 4
-        # loss weight hyper para
-        self.l1 = loss_weight[0]
-        self.l2 = loss_weight[1]
-        self.l3 = loss_weight[2]
-        self.l4 = loss_weight[3]
 
 
     def forward(self, edges, poses, imu_drots, imu_dtrans, imu_dvels, dts):
@@ -54,10 +50,7 @@ class PoseVelGraph(nn.Module):
         # translation-velocity cross constraint
         transvelerr = torch.diff(nodes.translation(), dim=0) - (vels[:-1] * dts + imu_dtrans)
 
-        return torch.cat((  self.l1 * pgerr.view(-1), 
-                            self.l2 * adjvelerr.view(-1), 
-                            self.l3 * imuroterr.view(-1), 
-                            self.l4 * transvelerr.view(-1)  ), dim=0)
+        return pgerr, adjvelerr, imuroterr, transvelerr
 
 
     def vo_loss(self, edges, poses):
@@ -99,6 +92,39 @@ class PoseVelGraph(nn.Module):
 def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtrans, imu_dvels, 
                 device='cuda:0', radius=1e4, loss_weight=(1,1,1,1)):
 
+    # information matrix
+    vo_motions_cpu = vo_motions.detach().cpu()
+    vo_rot_norms = torch.norm(vo_motions_cpu.rotation().Log(), dim=1).numpy()
+    vo_trans_norms = torch.norm(vo_motions_cpu.translation(), dim=1).numpy()
+    imu_rot_norms = torch.norm(imu_drots.Log(), dim=1).numpy()
+    imu_trans_norms = torch.norm(imu_dvels * dts.unsqueeze(-1), dim=1).numpy()
+
+    vo_rot_covs, vo_trans_covs = kitti_vo_func(vo_rot_norms, vo_trans_norms)
+    imu_rot_covs, imu_trans_covs = kitti_imu_func(imu_rot_norms, imu_trans_norms)
+    imu_vel_covs = imu_trans_covs / dts.numpy()**2
+
+    # vo_rot_infos = (1 / vo_rot_covs) / np.mean(1 / vo_rot_covs) * loss_weight[0]**2
+    # vo_trans_infos = (1 / vo_trans_covs) / np.mean(1 / vo_trans_covs) * loss_weight[0]**2
+    # imu_rot_infos = (1 / imu_rot_covs) / np.mean(1 / imu_rot_covs) * loss_weight[2]**2
+    # imu_vel_infos = (1 / imu_vel_covs) / np.mean(1 / imu_vel_covs) * loss_weight[1]**2
+    # transvel_infos = np.ones(len(init_nodes)-1) * loss_weight[3]**2
+
+    # debug
+    vo_rot_infos = np.ones_like(vo_rot_covs) * loss_weight[0]**2
+    vo_trans_infos = np.ones_like(vo_trans_covs) * loss_weight[0]**2
+    imu_rot_infos = np.ones_like(imu_rot_covs) * loss_weight[2]**2
+    imu_vel_infos = np.ones_like(imu_vel_covs) * loss_weight[1]**2
+    transvel_infos = np.ones(len(init_nodes)-1) * loss_weight[3]**2
+
+    vo_info_mats       = [torch.diag(torch.tensor([vo_trans_infos[i]]*3 + [vo_rot_infos[i]]*3))
+                          for i in range(len(vo_trans_infos))]
+    imu_rot_info_mats  = [torch.diag(torch.tensor([imu_rot_infos[i]]*3))
+                          for i in range(len(imu_rot_infos))]
+    imu_vel_info_mats  = [torch.diag(torch.tensor([imu_vel_infos[i]]*3))
+                          for i in range(len(imu_vel_infos))]
+    transvel_info_mats = [torch.diag(torch.tensor([transvel_infos[i]*3]))
+                          for i in range(len(transvel_infos))]
+        
     # init inputs
     edges = links.to(device)
     poses = vo_motions.detach().to(device)
@@ -106,9 +132,13 @@ def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtran
     imu_dtrans = imu_dtrans.to(device)
     imu_dvels = imu_dvels.to(device)
     dts = dts.unsqueeze(-1).to(device)
+    vo_info_mats = torch.stack(vo_info_mats).to(torch.float32).to(device)
+    imu_rot_info_mats = torch.stack(imu_rot_info_mats).to(torch.float32).to(device)
+    imu_vel_info_mats = torch.stack(imu_vel_info_mats).to(torch.float32).to(device)
+    transvel_info_mats = torch.stack(transvel_info_mats).to(torch.float32).to(device)
 
     # build graph and optimizer
-    graph = PoseVelGraph(init_nodes, init_vels, loss_weight).to(device)
+    graph = PoseVelGraph(init_nodes, init_vels).to(device)
     solver = ppos.Cholesky()
     strategy = ppost.TrustRegion(radius=radius)
     optimizer = pp.optim.LM(graph, solver=solver, strategy=strategy, min=1e-4, vectorize=True)
@@ -118,7 +148,8 @@ def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtran
 
     # optimization loop
     while scheduler.continual():
-        loss = optimizer.step(input=(edges, poses, imu_drots, imu_dtrans, imu_dvels, dts))
+        loss = optimizer.step(input=(edges, poses, imu_drots, imu_dtrans, imu_dvels, dts), 
+                              weight=(vo_info_mats, imu_vel_info_mats, imu_rot_info_mats, transvel_info_mats))
         scheduler.step(loss)
 
     # end_time = time.time()
@@ -135,4 +166,8 @@ def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtran
     nodes = nodes.detach().cpu()
     vels = vels.detach().cpu()
 
-    return trans_loss, rot_loss, nodes, vels
+    covs = {'vo_rot':vo_rot_infos, 'imu_rot':imu_rot_infos,
+            'vo_trans':vo_trans_infos, 'imu_vel':imu_vel_infos,
+            'transvel':transvel_infos}
+
+    return trans_loss, rot_loss, nodes, vels, covs

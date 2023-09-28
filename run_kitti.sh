@@ -51,7 +51,7 @@ else
     exp_type='stereo'
 fi
 
-# project_name=test_kitti_rcam
+# project_name=test_kitti_cov
 project_name=$2
 train_name=${rot_w}Ra_${trans_w}ta_delayOptm_lr=${lr}_${loss_weight}_${exp_type}
 
@@ -89,8 +89,7 @@ if [ "$use_scale" = true ]; then
         --rot-w ${rot_w} \
         --trans-w ${trans_w} \
         --train-portion ${train_portion} \
-        --use-gt-scale \
-        --vo-right-cam
+        --use-gt-scale
 else
     # stereo: calc scale
     python train.py \
@@ -113,6 +112,5 @@ else
         --fix-model-parts 'flow' 'stereo' \
         --rot-w ${rot_w} \
         --trans-w ${trans_w} \
-        --train-portion ${train_portion} \
-        --vo-right-cam
+        --train-portion ${train_portion}
 fi
