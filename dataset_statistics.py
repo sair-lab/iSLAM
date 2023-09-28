@@ -6,7 +6,8 @@ def func(x, a, b, c):
 def kitti_imu_func(rx, tx):
     ry = [0.0009536675582686507*x + 1e-06 if x < 0.005 else func(x, 0.00254876, 0.00375321, -0.00254304) for x in rx]
     # ty = [func(x, 0.00270267, 1.64663426, 0.05185503) for x in tx]
-    ty = [0.05142675009977031 if x < 1 else func(x, 0.03021272, 0.90654935, -0.02337283) for x in tx]
+    # ty = [0.05142675009977031 if x < 1 else func(x, 0.03021272, 0.90654935, -0.02337283) for x in tx]
+    ty = [0.014163680639682055 if x < 1 else func(x, 0.05573296, 0.38468915, -0.06771681) for x in tx]
     return np.array(ry), np.array(ty)
 
 def kitti_vo_func(rx, tx):
