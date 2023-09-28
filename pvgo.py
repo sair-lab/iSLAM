@@ -51,6 +51,12 @@ class PoseVelGraph(nn.Module):
         transvelerr = torch.diff(nodes.translation(), dim=0) - (vels[:-1] * dts + imu_dtrans)
 
         return pgerr, adjvelerr, imuroterr, transvelerr
+        # return torch.cat([
+        #     1 * pgerr.view(-1),
+        #     0.1 * adjvelerr.view(-1),
+        #     10 * imuroterr.view(-1),
+        #     0.1 * transvelerr.view(-1)
+        # ])
 
 
     def vo_loss(self, edges, poses):
@@ -150,6 +156,7 @@ def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtran
     while scheduler.continual():
         loss = optimizer.step(input=(edges, poses, imu_drots, imu_dtrans, imu_dvels, dts), 
                               weight=(vo_info_mats, imu_vel_info_mats, imu_rot_info_mats, transvel_info_mats))
+        # loss = optimizer.step(input=(edges, poses, imu_drots, imu_dtrans, imu_dvels, dts))
         scheduler.step(loss)
 
     # end_time = time.time()

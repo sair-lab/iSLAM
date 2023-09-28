@@ -43,8 +43,9 @@ def init_epoch():
     pgo_poses_list = [init_pose]
     pgo_vels_list = [init_state['vel']]
 
-    global imu_poses_list, vo_rev_poses_list, vo_rcam_poses_list
+    global imu_poses_list, imu_motions_list, vo_rev_poses_list, vo_rcam_poses_list
     imu_poses_list = [init_pose]
+    imu_motions_list = []
     vo_rev_poses_list = [init_pose]
     vo_rcam_poses_list = [init_pose]
 
@@ -66,6 +67,7 @@ def snapshot(final=False):
     np.savetxt('{}/{}/pgo_motion.txt'.format(trainroot, epoch), np.stack(pgo_motions_list))
     np.savetxt('{}/{}/pgo_vel.txt'.format(trainroot, epoch), np.stack(pgo_vels_list))
     np.savetxt('{}/{}/imu_pose.txt'.format(trainroot, epoch), np.stack(imu_poses_list))
+    np.savetxt('{}/{}/imu_motion.txt'.format(trainroot, epoch), np.stack(imu_motions_list))
     if args.vo_reverse_edge:
         np.savetxt('{}/{}/vo_rev_pose.txt'.format(trainroot, epoch), np.stack(vo_rev_poses_list))
     if args.vo_right_cam:
@@ -235,7 +237,7 @@ if __name__ == '__main__':
             # loop closure
             if loop_closure is not None:
                 loopclosure_poses, keyframes, loop_edges, loop_motions = \
-                    loop_closure.perform(pp.SE3(pgo_poses_list), tartanvo)
+                    loop_closure.perform(pp.SE3(np.stack(pgo_poses_list)), tartanvo)
 
             snapshot(final=True)
 
@@ -314,8 +316,9 @@ if __name__ == '__main__':
 
         imu_trans, imu_rots, imu_covs, imu_vels = imu_module.integrate(st, end, init_state, motion_mode=False)
         imu_poses = pp.SE3(torch.cat((imu_trans, imu_rots.tensor()), axis=1))
-        imu_poses = pp.SE3(imu_poses_list[-1]) @ imu_poses[0].Inv() @ imu_poses
+        imu_motions = pose2motion_pypose(imu_poses)
         imu_poses_list.extend(imu_poses[1:].numpy())
+        imu_motions_list.extend(imu_motions.numpy())
 
         imu_dtrans, imu_drots, imu_dcovs, imu_dvels = imu_module.integrate(st, end, init_state, motion_mode=True)
 
