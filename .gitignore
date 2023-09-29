@@ -3,6 +3,7 @@ train_*/
 test_*/
 temp*/
 slurm_*/
+logs/
 
 __pycache__/
 
