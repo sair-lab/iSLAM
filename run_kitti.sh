@@ -51,7 +51,7 @@ else
     exp_type='stereo'
 fi
 
-# project_name=test_kitti_covi
+# project_name=test_kitti_denoise_acc
 project_name=$2
 train_name=${rot_w}Ra_${trans_w}ta_delayOptm_lr=${lr}_${loss_weight}_${exp_type}
 
@@ -74,6 +74,7 @@ if [ "$use_scale" = true ]; then
         --project-name ${project_name} \
         --train-name ${train_name} \
         --vo-model-name ./models/stereo_cvt_tartanvo_1914.pkl \
+        --imu-denoise-model-name ./models/imu_denoise_kitti.pkl \
         --batch-size ${batch_size} \
         --worker-num 2 \
         --data-root ${data_dir} \
@@ -98,6 +99,7 @@ else
         --project-name ${project_name} \
         --train-name ${train_name} \
         --vo-model-name ./models/stereo_cvt_tartanvo_1914.pkl \
+        --imu-denoise-model-name ./models/imu_denoise_kitti.pkl \
         --batch-size ${batch_size} \
         --worker-num 2 \
         --data-root ${data_dir} \

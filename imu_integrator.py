@@ -6,7 +6,7 @@ from Network.IMUDenoiseNet import IMUCorrector_CNN_GRU
 
 class IMUModule:
     def __init__(self, accels, gyros, dts, init=None, gravity=9.81007, rgb2imu_sync=None, 
-                 device='cuda:0', use_denoiser=True):
+                 device='cuda:0', denoise_model_name=None, denoise_accel=True, denoise_gyro=True):
         
         self.device = device
 
@@ -24,11 +24,15 @@ class IMUModule:
         self.integrator = pp.module.IMUPreintegrator(
             init_pos, init_rot, init_vel, gravity=float(gravity)).to(device)
 
-        if use_denoiser:
+        if denoise_model_name is not None and denoise_model_name != '' and (denoise_accel or denoise_gyro):
             self.denoiser = IMUCorrector_CNN_GRU()
-            pretrain = torch.load('./models/imu_denoise.pkl')
+            pretrain = torch.load(denoise_model_name)
             self.denoiser.load_state_dict(pretrain)
             self.denoiser = self.denoiser.to(device)
+
+            self.denoise_accel = denoise_accel
+            self.denoise_gyro = denoise_gyro
+
         else:
             self.denoiser = None
 
@@ -77,27 +81,37 @@ class IMUModule:
 
         state = {'pos':init_pos.unsqueeze(0), 'rot':init_rot.unsqueeze(0), 'vel':init_vel.unsqueeze(0)}
         last_state = {'pos':init_pos, 'rot':init_rot, 'vel':init_vel}
+
+        imu_batch_st = self.rgb2imu_sync[st]
+        imu_batch_end = self.rgb2imu_sync[end]
+
+        dts = self.dts[imu_batch_st:imu_batch_end]
+        gyros = self.gyros[imu_batch_st:imu_batch_end]
+        accels = self.accels[imu_batch_st:imu_batch_end]
+
+        if self.denoiser is not None and imu_batch_end - imu_batch_st >= 10:
+            data = {'acc':accels, 'gyro':gyros}
+            denoised_accels, denoised_gyros, acc_cov, gyro_cov = self.denoiser(data, eval=True)
+            if self.denoise_accel:
+                accels = denoised_accels
+            if self.denoise_gyro:
+                gyros = denoised_gyros
         
         for i in range(st, end):
-            imu_st = self.rgb2imu_sync[i]
-            imu_end = self.rgb2imu_sync[i+1]
+            imu_frame_st = self.rgb2imu_sync[i] - imu_batch_st
+            imu_frame_end = self.rgb2imu_sync[i+1] - imu_batch_st
 
-            dt = self.dts[imu_st:imu_end]
-            gyro = self.gyros[imu_st:imu_end]
-            acc = self.accels[imu_st:imu_end]
-
-            if self.denoiser is not None:
-                data = {'acc':acc, 'gyro':gyro}
-                acc, gyro, acc_cov, gyro_cov = self.denoiser(data, eval=True)
-
-            if imu_st == imu_end:
-                dtype = self.accels.dtype
+            if imu_frame_st == imu_frame_end:
+                dtype = accels.dtype
                 if motion_mode:
                     state['pos'] = torch.zeros((1, 3), dtype=dtype).to(self.device)
                     state['vel'] = torch.zeros((1, 3), dtype=dtype).to(self.device)
                 else:
                     state['vel'] = torch.zeros((1, 3), dtype=dtype).to(self.device)
             else:
+                dt = dts[imu_frame_st:imu_frame_end]
+                gyro = gyros[imu_frame_st:imu_frame_end]
+                acc = accels[imu_frame_st:imu_frame_end]
                 state = self.integrator(dt=dt, gyro=gyro, acc=acc, init_state=last_state)
 
             poses.append(state['pos'][..., -1, :].squeeze().cpu())

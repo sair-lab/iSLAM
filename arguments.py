@@ -9,6 +9,8 @@ def get_args():
                         help='data loader worker number (default: 1)')
     parser.add_argument('--vo-model-name', default='',
                         help='name of pretrained vo model (default: "")')
+    parser.add_argument('--imu-denoise-model-name', default='',
+                        help='name of pretrained imu denoise model (default: "")')
     parser.add_argument('--data-root', default='',
                         help='data root dir (default: "")')
     parser.add_argument('--start-frame', type=int, default=0,

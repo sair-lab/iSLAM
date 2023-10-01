@@ -110,19 +110,19 @@ def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtran
     imu_vel_covs = imu_trans_covs / dts.numpy()**2
 
     # cov
-    vo_rot_infos = (1 / vo_rot_covs)
-    vo_trans_infos = (1 / vo_trans_covs)
-    imu_rot_infos = (1 / imu_rot_covs)
-    imu_vel_infos = (1 / imu_vel_covs)
+    # vo_rot_infos = (1 / vo_rot_covs)
+    # vo_trans_infos = (1 / vo_trans_covs)
+    # imu_rot_infos = (1 / imu_rot_covs)
+    # imu_vel_infos = (1 / imu_vel_covs)
     # transvel_infos = np.ones(len(init_nodes)-1)
-    transvel_infos = imu_vel_infos
+    # transvel_infos = imu_vel_infos
 
     # scov
-    # vo_rot_infos = (1 / vo_rot_covs) / np.mean(1 / vo_rot_covs) * loss_weight[0]**2
-    # vo_trans_infos = (1 / vo_trans_covs) / np.mean(1 / vo_trans_covs) * loss_weight[0]**2
-    # imu_rot_infos = (1 / imu_rot_covs) / np.mean(1 / imu_rot_covs) * loss_weight[2]**2
-    # imu_vel_infos = (1 / imu_vel_covs) / np.mean(1 / imu_vel_covs) * loss_weight[1]**2
-    # transvel_infos = np.ones(len(init_nodes)-1) * loss_weight[3]**2
+    vo_rot_infos = (1 / vo_rot_covs) / np.mean(1 / vo_rot_covs) * loss_weight[0]**2
+    vo_trans_infos = (1 / vo_trans_covs) / np.mean(1 / vo_trans_covs) * loss_weight[0]**2
+    imu_rot_infos = (1 / imu_rot_covs) / np.mean(1 / imu_rot_covs) * loss_weight[2]**2
+    imu_vel_infos = (1 / imu_vel_covs) / np.mean(1 / imu_vel_covs) * loss_weight[1]**2
+    transvel_infos = np.ones(len(init_nodes)-1) * loss_weight[3]**2
 
     # seye
     # vo_rot_infos = np.ones_like(vo_rot_covs) * loss_weight[0]**2
