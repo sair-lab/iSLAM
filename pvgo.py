@@ -118,18 +118,18 @@ def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtran
     # transvel_infos = imu_vel_infos
 
     # scov
-    vo_rot_infos = (1 / vo_rot_covs) / np.mean(1 / vo_rot_covs) * loss_weight[0]**2
-    vo_trans_infos = (1 / vo_trans_covs) / np.mean(1 / vo_trans_covs) * loss_weight[0]**2
-    imu_rot_infos = (1 / imu_rot_covs) / np.mean(1 / imu_rot_covs) * loss_weight[2]**2
-    imu_vel_infos = (1 / imu_vel_covs) / np.mean(1 / imu_vel_covs) * loss_weight[1]**2
-    transvel_infos = np.ones(len(init_nodes)-1) * loss_weight[3]**2
+    # vo_rot_infos = (1 / vo_rot_covs) / np.mean(1 / vo_rot_covs) * loss_weight[0]**2
+    # vo_trans_infos = (1 / vo_trans_covs) / np.mean(1 / vo_trans_covs) * loss_weight[0]**2
+    # imu_rot_infos = (1 / imu_rot_covs) / np.mean(1 / imu_rot_covs) * loss_weight[2]**2
+    # imu_vel_infos = (1 / imu_vel_covs) / np.mean(1 / imu_vel_covs) * loss_weight[1]**2
+    # transvel_infos = np.ones(len(init_nodes)-1) * loss_weight[3]**2
 
     # seye
-    # vo_rot_infos = np.ones_like(vo_rot_covs) * loss_weight[0]**2
-    # vo_trans_infos = np.ones_like(vo_trans_covs) * loss_weight[0]**2
-    # imu_rot_infos = np.ones_like(imu_rot_covs) * loss_weight[2]**2
-    # imu_vel_infos = np.ones_like(imu_vel_covs) * loss_weight[1]**2
-    # transvel_infos = np.ones(len(init_nodes)-1) * loss_weight[3]**2
+    vo_rot_infos = np.ones_like(vo_rot_covs) * loss_weight[0]**2
+    vo_trans_infos = np.ones_like(vo_trans_covs) * loss_weight[0]**2
+    imu_rot_infos = np.ones_like(imu_rot_covs) * loss_weight[2]**2
+    imu_vel_infos = np.ones_like(imu_vel_covs) * loss_weight[1]**2
+    transvel_infos = np.ones(len(init_nodes)-1) * loss_weight[3]**2
 
     vo_info_mats       = [torch.diag(torch.tensor([vo_trans_infos[i]]*3 + [vo_rot_infos[i]]*3))
                           for i in range(len(vo_trans_infos))]

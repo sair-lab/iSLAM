@@ -32,7 +32,7 @@ conda activate iSLAM
 # export CUDA_VISIBLE_DEVICES=1
 
 # data_dir=/projects/academic/cwx/euroc/V2_03_difficult/mav0
-# data_dir=/home/data2/euroc_raw/V2_03_difficult/mav0
+# data_dir=/data/euroc/V2_03_difficult/mav0
 data_dir=$1
 
 loss_weight='(4,0.1,2,0.1)'
@@ -50,7 +50,7 @@ else
     exp_type='stereo'
 fi
 
-# project_name=test_euroc_rev
+# project_name=test_euroc_denoise
 project_name=$2
 train_name=${rot_w}Ra_${trans_w}ta_delayOptm_lr=${lr}_${loss_weight}_${exp_type}
 
@@ -99,7 +99,7 @@ else
         --project-name ${project_name} \
         --train-name ${train_name} \
         --vo-model-name ./models/stereo_cvt_tartanvo_1914.pkl \
-        --imu-denoise-model-name ./models/imu_denoise_kitti.pkl \
+        --imu-denoise-model-name ./models/imu_denoise_euroc.pkl \
         --batch-size ${batch_size} \
         --worker-num 2 \
         --data-root ${data_dir} \
