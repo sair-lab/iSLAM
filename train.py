@@ -3,6 +3,7 @@ from Datasets.transformation import tartan2kitti_pypose, motion2pose_pypose, pos
 from Datasets.utils import kitti_raw2odometry, euroc_raw2short
 from Datasets.TrajFolderDataset import TrajFolderDataset
 from Evaluator.evaluate_rpe import calc_motion_error
+from dense_ba import ReprojectionLoss
 from TartanVO import TartanVO
 from mapper import Mapper
 
@@ -250,7 +251,8 @@ if __name__ == '__main__':
         ############################## forward VO ######################################################################
         timer.tic('vo')
 
-        motions = tartanvo(sample)
+        vo_result = tartanvo(sample)
+        motions = vo_result['motion']
         T_IL = dataset.rgb2imu_pose.to(motions.device)
         motions = T_IL @ motions @ T_IL.Inv()
 
@@ -354,12 +356,22 @@ if __name__ == '__main__':
             # print(links)
             # print(motions.shape)
 
+        if len(args.loss_weight) == 5:
+            fx, fy, cx, cy = vo_result['intrinsic']
+            reproj = ReprojectionLoss(
+                vo_result['depth'], vo_result['flow'], fx, fy, cx, cy,
+                vo_result['mask'], dataset.rgb2imu_pose, motions.device
+            )
+        else:
+            reproj = None
+
         trans_loss, rot_loss, pgo_poses, pgo_vels, covs = run_pvgo(
             imu_poses, imu_vels,
             motions, links, dts,
             imu_drots, imu_dtrans, imu_dvels,
             device='cuda', radius=1e4,
-            loss_weight=args.loss_weight
+            loss_weight=args.loss_weight,
+            reproj=reproj
         )
         pgo_motions = pose2motion_pypose(pgo_poses)
 
@@ -403,6 +415,9 @@ if __name__ == '__main__':
 
         ############################## mapping ######################################################################
         if not args.use_gt_scale and args.enable_mapping:
+            depths = vo_result['depth']
+            masks = vo_result['mask']
+
             for i in range(0, args.batch_size, 2):
                 img = sample['img0'][i].permute(1, 2, 0).numpy()
                 img = cv2.resize(img, None, fx=1/4, fy=1/4, interpolation=cv2.INTER_LINEAR)

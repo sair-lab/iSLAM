@@ -33,10 +33,10 @@ conda activate iSLAM
 
 # data_dir=/projects/academic/cwx/kitti_raw/2011_10_03/2011_10_03_drive_0027_sync
 # data_dir=/home/data2/kitti_raw/2011_10_03/2011_10_03_drive_0042_sync
-# data_dir=/data/kitti/2011_09_30/2011_09_30_drive_0018_sync
-data_dir=$1
+data_dir=/data/kitti/2011_09_30/2011_09_30_drive_0018_sync
+# data_dir=$1
 
-loss_weight='(1,0.1,10,0.1)'
+loss_weight='(1,0.1,10,0.1,0)'
 rot_w=1
 trans_w=0.1
 batch_size=8
@@ -51,8 +51,8 @@ else
     exp_type='stereo'
 fi
 
-# project_name=test_kitti_denoise_acc
-project_name=$2
+project_name=test_kitti_reproj
+# project_name=$2
 train_name=${rot_w}Ra_${trans_w}ta_delayOptm_lr=${lr}_${loss_weight}_${exp_type}
 
 echo "=============================================="
@@ -74,7 +74,6 @@ if [ "$use_scale" = true ]; then
         --project-name ${project_name} \
         --train-name ${train_name} \
         --vo-model-name ./models/stereo_cvt_tartanvo_1914.pkl \
-        --imu-denoise-model-name ./models/imu_denoise_kitti.pkl \
         --batch-size ${batch_size} \
         --worker-num 2 \
         --data-root ${data_dir} \
@@ -99,7 +98,6 @@ else
         --project-name ${project_name} \
         --train-name ${train_name} \
         --vo-model-name ./models/stereo_cvt_tartanvo_1914.pkl \
-        --imu-denoise-model-name ./models/imu_denoise_kitti.pkl \
         --batch-size ${batch_size} \
         --worker-num 2 \
         --data-root ${data_dir} \

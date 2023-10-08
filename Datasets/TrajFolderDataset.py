@@ -571,5 +571,10 @@ class TrajFolderDataset(TrajFolderDatasetBase):
         if self.right2left_pose != None:
             res['extrinsic'] = self.right2left_pose.clone().numpy()
 
+        res['img0_file'] = self.rgbfiles[i]
+        res['img1_file'] = self.rgbfiles[j]
+        res['img0_r_file'] = self.rgbfiles_right[i]
+        res['img1_r_file'] = self.rgbfiles_right[j]
+
         return res
     

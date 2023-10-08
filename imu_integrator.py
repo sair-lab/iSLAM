@@ -83,7 +83,7 @@ class IMUModule:
         last_state = {'pos':init_pos, 'rot':init_rot, 'vel':init_vel}
 
         imu_batch_st = self.rgb2imu_sync[st]
-        imu_batch_end = self.rgb2imu_sync[end]
+        imu_batch_end = self.rgb2imu_sync[end] + 1
 
         dts = self.dts[imu_batch_st:imu_batch_end]
         gyros = self.gyros[imu_batch_st:imu_batch_end]
@@ -100,19 +100,13 @@ class IMUModule:
         for i in range(st, end):
             imu_frame_st = self.rgb2imu_sync[i] - imu_batch_st
             imu_frame_end = self.rgb2imu_sync[i+1] - imu_batch_st
+            if (imu_frame_st == imu_frame_end):
+                imu_frame_end += 1
 
-            if imu_frame_st == imu_frame_end:
-                dtype = accels.dtype
-                if motion_mode:
-                    state['pos'] = torch.zeros((1, 3), dtype=dtype).to(self.device)
-                    state['vel'] = torch.zeros((1, 3), dtype=dtype).to(self.device)
-                else:
-                    state['vel'] = torch.zeros((1, 3), dtype=dtype).to(self.device)
-            else:
-                dt = dts[imu_frame_st:imu_frame_end]
-                gyro = gyros[imu_frame_st:imu_frame_end]
-                acc = accels[imu_frame_st:imu_frame_end]
-                state = self.integrator(dt=dt, gyro=gyro, acc=acc, init_state=last_state)
+            dt = dts[imu_frame_st:imu_frame_end]
+            gyro = gyros[imu_frame_st:imu_frame_end]
+            acc = accels[imu_frame_st:imu_frame_end]
+            state = self.integrator(dt=dt, gyro=gyro, acc=acc, init_state=last_state)
 
             poses.append(state['pos'][..., -1, :].squeeze().cpu())
             vels.append(state['vel'][..., -1, :].squeeze().cpu())

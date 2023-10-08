@@ -15,12 +15,14 @@ from pypose.optim.scheduler import StopOnPlateau
 
  
 class PoseVelGraph(nn.Module):
-    def __init__(self, nodes, vels):
+    def __init__(self, nodes, vels, reproj=None):
         super().__init__()
 
         assert nodes.size(0) == vels.size(0)
         self.nodes = pp.Parameter(nodes.clone())
         self.vels = torch.nn.Parameter(vels.clone())
+
+        self.reproj = reproj
 
 
     def forward(self, edges, poses, imu_drots, imu_dtrans, imu_dvels, dts):
@@ -50,7 +52,17 @@ class PoseVelGraph(nn.Module):
         # translation-velocity cross constraint
         transvelerr = torch.diff(nodes.translation(), dim=0) - (vels[:-1] * dts + imu_dtrans)
 
-        return pgerr, adjvelerr, imuroterr, transvelerr
+        if self.reproj is not None:
+            node1 = nodes[ :-1]
+            node2 = nodes[1:  ]
+            motion = node1.Inv() @ node2
+            motion[0] = 0.1
+            reprojerr = self.reproj(motion)
+
+            return pgerr, adjvelerr, imuroterr, transvelerr, reprojerr
+        else:
+            return pgerr, adjvelerr, imuroterr, transvelerr
+        # return pgerr, adjvelerr, imuroterr, transvelerr
         # return torch.cat([
         #     1 * pgerr.view(-1),
         #     0.1 * adjvelerr.view(-1),
@@ -96,7 +108,7 @@ class PoseVelGraph(nn.Module):
 
 
 def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtrans, imu_dvels, 
-                device='cuda:0', radius=1e4, loss_weight=(1,1,1,1)):
+                device='cuda:0', radius=1e4, loss_weight=(1,1,1,1), reproj=None):
 
     # information matrix
     vo_motions_cpu = vo_motions.detach().cpu()
@@ -125,11 +137,13 @@ def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtran
     # transvel_infos = np.ones(len(init_nodes)-1) * loss_weight[3]**2
 
     # seye
-    vo_rot_infos = np.ones_like(vo_rot_covs) * loss_weight[0]**2
-    vo_trans_infos = np.ones_like(vo_trans_covs) * loss_weight[0]**2
-    imu_rot_infos = np.ones_like(imu_rot_covs) * loss_weight[2]**2
-    imu_vel_infos = np.ones_like(imu_vel_covs) * loss_weight[1]**2
+    vo_rot_infos = np.ones(len(links)) * loss_weight[0]**2
+    vo_trans_infos = np.ones(len(links)) * loss_weight[0]**2
+    imu_rot_infos = np.ones(len(init_nodes)-1) * loss_weight[2]**2
+    imu_vel_infos = np.ones(len(init_nodes)-1) * loss_weight[1]**2
     transvel_infos = np.ones(len(init_nodes)-1) * loss_weight[3]**2
+    if reproj is not None:
+        reproj_infos = np.ones(len(init_nodes)-1) * loss_weight[4]**2
 
     vo_info_mats       = [torch.diag(torch.tensor([vo_trans_infos[i]]*3 + [vo_rot_infos[i]]*3))
                           for i in range(len(vo_trans_infos))]
@@ -139,7 +153,9 @@ def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtran
                           for i in range(len(imu_vel_infos))]
     transvel_info_mats = [torch.diag(torch.tensor([transvel_infos[i]*3]))
                           for i in range(len(transvel_infos))]
-        
+    if reproj is not None:
+        reproj_info_mats = torch.tensor(reproj_infos).view(-1, 1, 1)
+    
     # init inputs
     edges = links.to(device)
     poses = vo_motions.detach().to(device)
@@ -151,9 +167,13 @@ def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtran
     imu_rot_info_mats = torch.stack(imu_rot_info_mats).to(torch.float32).to(device)
     imu_vel_info_mats = torch.stack(imu_vel_info_mats).to(torch.float32).to(device)
     transvel_info_mats = torch.stack(transvel_info_mats).to(torch.float32).to(device)
+    weights = [vo_info_mats, imu_vel_info_mats, imu_rot_info_mats, transvel_info_mats]
+    if reproj is not None:
+        reproj_info_mats = reproj_info_mats.to(torch.float32).to(device)
+        weights.append(reproj_info_mats)
 
     # build graph and optimizer
-    graph = PoseVelGraph(init_nodes, init_vels).to(device)
+    graph = PoseVelGraph(init_nodes, init_vels, reproj).to(device)
     solver = ppos.Cholesky()
     strategy = ppost.TrustRegion(radius=radius)
     optimizer = pp.optim.LM(graph, solver=solver, strategy=strategy, min=1e-4, vectorize=True)
@@ -163,8 +183,7 @@ def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtran
 
     # optimization loop
     while scheduler.continual():
-        loss = optimizer.step(input=(edges, poses, imu_drots, imu_dtrans, imu_dvels, dts), 
-                              weight=(vo_info_mats, imu_vel_info_mats, imu_rot_info_mats, transvel_info_mats))
+        loss = optimizer.step(input=(edges, poses, imu_drots, imu_dtrans, imu_dvels, dts), weight=weights)
         # loss = optimizer.step(input=(edges, poses, imu_drots, imu_dtrans, imu_dvels, dts))
         scheduler.step(loss)
 

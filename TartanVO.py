@@ -107,6 +107,10 @@ class TartanVO(nn.Module):
             ############################## forward vonet ######################################################################   
             flow, disp, pose = self.vonet(img0, img1, img0_norm, img0_r_norm, intrinsic)
             pose = pose * self.pose_std # The output is normalized during training, now scale it back
+            flow = flow.detach()
+            disp = disp.detach()
+
+            res = {}
 
             if given_scale is not None:
                 trans = torch.nn.functional.normalize(pose[:, :3], dim=1) * given_scale.view(-1, 1)
@@ -150,20 +154,28 @@ class TartanVO(nn.Module):
                 edge = torch.from_numpy(np.stack(edge)).cuda(self.device_id)
 
                 ############################## calculate scale ######################################################################   
-                scale = []
-                mask = []
-                depth = []
+                scale, mask, depth, depth_mask = [], [], [], []
                 for i in range(pose.shape[0]):
                     fx, fy, cx, cy = intrinsic_calib[i] / 4
                     disp_th_dict = {'kitti':5, 'tartanair':1, 'euroc':1}
-                    s, z, m = scale_from_disp_flow(disp[i], flow[i], pose_ENU_SE3[i], fx, fy, cx, cy, baseline[i], 
+                    s, z, m, dm = scale_from_disp_flow(disp[i], flow[i], pose_ENU_SE3[i], fx, fy, cx, cy, baseline[i], 
                                                     mask=edge[i], disp_th=disp_th_dict[sample['datatype'][i]])
                     scale.append(s)
                     mask.append(m)
                     depth.append(z)
+                    depth_mask.append(dm)
                 scale = torch.stack(scale)
                 mask = torch.stack(mask)
                 depth = torch.stack(depth)
+                depth_mask = torch.stack(depth_mask)
+
+                res['flow'] = flow
+                res['disp'] = disp
+                res['mask'] = mask
+                res['depth'] = depth
+                res['depth_mask'] = depth_mask
+                res['baseline'] = baseline[0]
+                res['intrinsic'] = intrinsic_calib[0] / 4
                 
                 trans = torch.nn.functional.normalize(pose[:, :3], dim=1) * scale.view(-1, 1)
                 pose = torch.cat([trans, pose[:, 3:]], dim=1)
@@ -177,8 +189,9 @@ class TartanVO(nn.Module):
                 pose = torch.cat([trans, pose[:, 3:]], dim=1)
 
             pose = tartan2kitti_pypose(pose)
+            res['motion'] = pose
 
-            return pose
+            return res
 
 
     def pred_flow(self, img0, img1):
