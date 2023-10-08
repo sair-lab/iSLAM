@@ -58,6 +58,8 @@ class PoseVelGraph(nn.Module):
             motion = node1.Inv() @ node2
             motion[0] = 0.1
             reprojerr = self.reproj(motion)
+            if len(reprojerr.shape) == 3:
+                reprojerr = reprojerr.view(-1, self.reproj.N*2)
 
             return pgerr, adjvelerr, imuroterr, transvelerr, reprojerr
         else:
@@ -143,7 +145,7 @@ def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtran
     imu_vel_infos = np.ones(len(init_nodes)-1) * loss_weight[1]**2
     transvel_infos = np.ones(len(init_nodes)-1) * loss_weight[3]**2
     if reproj is not None:
-        reproj_infos = np.ones(len(init_nodes)-1) * loss_weight[4]**2
+        reproj_infos = np.ones(len(init_nodes)-1) * (loss_weight[4]/reproj.N)**2
 
     vo_info_mats       = [torch.diag(torch.tensor([vo_trans_infos[i]]*3 + [vo_rot_infos[i]]*3))
                           for i in range(len(vo_trans_infos))]
@@ -151,10 +153,11 @@ def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtran
                           for i in range(len(imu_rot_infos))]
     imu_vel_info_mats  = [torch.diag(torch.tensor([imu_vel_infos[i]]*3))
                           for i in range(len(imu_vel_infos))]
-    transvel_info_mats = [torch.diag(torch.tensor([transvel_infos[i]*3]))
+    transvel_info_mats = [torch.diag(torch.tensor([transvel_infos[i]]*3))
                           for i in range(len(transvel_infos))]
     if reproj is not None:
-        reproj_info_mats = torch.tensor(reproj_infos).view(-1, 1, 1)
+        reproj_info_mats = [torch.diag(torch.tensor([reproj_infos[i]]*(reproj.N*2)))
+                          for i in range(len(reproj_infos))]
     
     # init inputs
     edges = links.to(device)
@@ -169,7 +172,7 @@ def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtran
     transvel_info_mats = torch.stack(transvel_info_mats).to(torch.float32).to(device)
     weights = [vo_info_mats, imu_vel_info_mats, imu_rot_info_mats, transvel_info_mats]
     if reproj is not None:
-        reproj_info_mats = reproj_info_mats.to(torch.float32).to(device)
+        reproj_info_mats = torch.stack(reproj_info_mats).to(torch.float32).to(device)
         weights.append(reproj_info_mats)
 
     # build graph and optimizer

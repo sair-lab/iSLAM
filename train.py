@@ -1,9 +1,9 @@
-from Datasets.utils import ToTensor, Compose, CropCenter, DownscaleFlow, Normalize, SqueezeBatchDim
 from Datasets.transformation import tartan2kitti_pypose, motion2pose_pypose, pose2motion_pypose, cvtSE3_pypose
+from Datasets.utils import ToTensor, Compose, CropCenter, DownscaleFlow, Normalize, SqueezeBatchDim
+from dense_ba import DenseReprojectionLoss, SparseReprojectionLoss, FAST_point_detector
 from Datasets.utils import kitti_raw2odometry, euroc_raw2short
 from Datasets.TrajFolderDataset import TrajFolderDataset
 from Evaluator.evaluate_rpe import calc_motion_error
-from dense_ba import ReprojectionLoss
 from TartanVO import TartanVO
 from mapper import Mapper
 
@@ -357,10 +357,12 @@ if __name__ == '__main__':
             # print(motions.shape)
 
         if len(args.loss_weight) == 5:
+            height, width = vo_result['depth'].shape[-2:]
+            point2d = FAST_point_detector(sample['img0'], height, width, N=10)
             fx, fy, cx, cy = vo_result['intrinsic']
-            reproj = ReprojectionLoss(
-                vo_result['depth'], vo_result['flow'], fx, fy, cx, cy,
-                vo_result['mask'], dataset.rgb2imu_pose, motions.device
+            reproj = SparseReprojectionLoss(
+                point2d, vo_result['depth'], vo_result['flow'], 
+                fx, fy, cx, cy, dataset.rgb2imu_pose, motions.device
             )
         else:
             reproj = None

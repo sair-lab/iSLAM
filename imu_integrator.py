@@ -9,6 +9,7 @@ class IMUModule:
                  device='cuda:0', denoise_model_name=None, denoise_accel=True, denoise_gyro=True):
         
         self.device = device
+        self.last_frame_dt = 0.1
 
         if rgb2imu_sync is None:
             self.rgb2imu_sync = [i for i in range(len(accels))]
@@ -100,12 +101,18 @@ class IMUModule:
         for i in range(st, end):
             imu_frame_st = self.rgb2imu_sync[i] - imu_batch_st
             imu_frame_end = self.rgb2imu_sync[i+1] - imu_batch_st
-            if (imu_frame_st == imu_frame_end):
-                imu_frame_end += 1
-
-            dt = dts[imu_frame_st:imu_frame_end]
-            gyro = gyros[imu_frame_st:imu_frame_end]
-            acc = accels[imu_frame_st:imu_frame_end]
+            
+            if imu_frame_st == imu_frame_end:
+                dtype = accels.dtype
+                dt = torch.ones((1, 1), dtype=dtype).to(self.device) * self.last_frame_dt
+                gyro = torch.zeros((1, 3), dtype=dtype).to(self.device)
+                acc = torch.zeros((1, 3), dtype=dtype).to(self.device)
+            else:
+                dt = dts[imu_frame_st:imu_frame_end]
+                self.last_frame_dt = torch.sum(dt)
+                gyro = gyros[imu_frame_st:imu_frame_end]
+                acc = accels[imu_frame_st:imu_frame_end]
+            
             state = self.integrator(dt=dt, gyro=gyro, acc=acc, init_state=last_state)
 
             poses.append(state['pos'][..., -1, :].squeeze().cpu())

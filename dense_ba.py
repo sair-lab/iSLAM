@@ -1,8 +1,66 @@
 import cv2
 import torch
+import random
 import numpy as np
 import pypose as pp
-from pypose.function.geometry import pixel2point, reprojerr
+from pypose.function.geometry import reprojerr
+
+
+# Shoule use the pypose built-in version after new release!!!
+def pixel2point(pixels, depth, intrinsics):
+    r'''
+    Convert batch of pixels with depth into points (in camera coordinate)
+
+    Args:
+        pixels: (``torch.Tensor``) The 2d coordinates of pixels in the camera
+            pixel coordinate.
+            Shape has to be (..., N, 2)
+
+        depth: (``torch.Tensor``) The depths of pixels with respect to the
+            sensor plane.
+            Shape has to be (..., N)
+
+        intrinsics: (``torch.Tensor``): The intrinsic parameters of cameras.
+            The shape has to be (..., 3, 3).
+
+    Returns:
+        ``torch.Tensor`` The associated 3D-points with shape (..., N, 3)
+
+    Example:
+        >>> import torch, pypose as pp
+        >>> f, (H, W) = 2, (9, 9) # focal length and image height, width
+        >>> intrinsics = torch.tensor([[f, 0, H / 2],
+        ...                            [0, f, W / 2],
+        ...                            [0, 0,   1  ]])
+        >>> pixels = torch.tensor([[0.5, 0.0],
+        ...                        [1.0, 0.0],
+        ...                        [0.0, 1.3],
+        ...                        [1.0, 0.0],
+        ...                        [0.5, 1.5],
+        ...                        [5.0, 1.5]])
+        >>> depths = torch.tensor([5.0, 3.0, 6.5, 2.0, 0.5, 0.7])
+        >>> points = pp.pixel2point(pixels, depths, intrinsics)
+        tensor([[-10.0000, -11.2500,   5.0000],
+                [ -5.2500,  -6.7500,   3.0000],
+                [-14.6250, -10.4000,   6.5000],
+                [ -3.5000,  -4.5000,   2.0000],
+                [ -1.0000,  -0.7500,   0.5000],
+                [  0.1750,  -1.0500,   0.7000]])
+    '''
+    assert pixels.size(-1) == 2, "Pixels shape incorrect"
+    assert depth.size(-1) == pixels.size(-2), "Depth shape does not match pixels"
+    assert intrinsics.size(-1) == intrinsics.size(-2) == 3, "Intrinsics shape incorrect."
+
+    fx, fy = intrinsics[..., 0, 0], intrinsics[..., 1, 1]
+    cx, cy = intrinsics[..., 0, 2], intrinsics[..., 1, 2]
+
+    assert not torch.any(fx == 0), "fx Cannot contain zero"
+    assert not torch.any(fy == 0), "fy Cannot contain zero"
+
+    pts3d_z = depth
+    pts3d_x = ((pixels[..., 0] - cx) * pts3d_z) / fx
+    pts3d_y = ((pixels[..., 1] - cy) * pts3d_z) / fy
+    return torch.stack([pts3d_x, pts3d_y, pts3d_z], dim=-1)
 
 
 def is_inside_image_1D(u, width):
@@ -138,10 +196,10 @@ def scale_from_disp_flow(disp, flow, motion, fx, fy, cx, cy, baseline, depth=Non
     # print(z.shape, z.device, mask.shape, mask.device)
     # print(torch.min(z[mask]), torch.max(z[mask]))
 
-    return s, z.squeeze().cpu(), mask.squeeze().cpu(), depth_mask.squeeze().cpu()
+    return s, z.squeeze(), mask.squeeze(), depth_mask.squeeze()
 
 
-class ReprojectionLoss:
+class DenseReprojectionLoss:
     def __init__(self, depth, flow, fx, fy, cx, cy, mask, rgb2imu_pose, device='cuda:0'):
         # (batch, channel, height, width)
         assert len(flow.shape) == 4
@@ -205,98 +263,91 @@ class ReprojectionLoss:
 
         # debug
 
-        def to_image(x):
-            return np.clip(np.abs(x), 0, 255).astype(np.uint8)
+        # def to_image(x):
+        #     return np.clip(np.abs(x), 0, 255).astype(np.uint8)
         
-        for i in range(bs):
-            z_gray = to_image(z[i].cpu().numpy()*10)
-            cv2.imwrite(f'temp/{i}_z_gray.png', z_gray)
-            mask_gray = to_image(self.mask[i].cpu().numpy()*200)
-            cv2.imwrite(f'temp/{i}_mask_gray.png', mask_gray)
-            reproj_rgb = np.concatenate([reproj[i].detach().cpu().permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(reproj.shape[2:]), axis=-1)], axis=-1)
-            reproj_rgb = to_image(reproj_rgb)
-            uv_rgb = np.concatenate([self.uv[i].cpu().permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(self.uv.shape[2:]), axis=-1)], axis=-1)
-            uv_rgb = to_image(uv_rgb)
-            cv2.imwrite(f'temp/{i}_reproj_rgb.png', reproj_rgb)
-            cv2.imwrite(f'temp/{i}_uv_rgb.png', uv_rgb)
-            flow_rgb = np.concatenate([self.flow[i].cpu().permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(self.flow.shape[2:]), axis=-1)], axis=-1)*10
-            flow_rgb = to_image(flow_rgb)
-            cv2.imwrite(f'temp/{i}_flow.png', flow_rgb)
-            flow_dest = self.flow[i].cpu() + self.uv[i].cpu()
-            flow_dest_rgb = np.concatenate([flow_dest.permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(flow_dest.shape[1:]), axis=-1)], axis=-1)
-            flow_dest_rgb = to_image(flow_dest_rgb)
-            cv2.imwrite(f'temp/{i}_flow_dest_rgb.png', flow_dest_rgb)
-            reproj_flow = reproj[i].detach().cpu() - self.uv[i].cpu()
-            reproj_flow_rgb = np.concatenate([reproj_flow.permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(reproj_flow.shape[1:]), axis=-1)], axis=-1)*10
-            reproj_flow_rgb = to_image(reproj_flow_rgb)
-            cv2.imwrite(f'temp/{i}_reproj_flow_rgb.png', reproj_flow_rgb)
-            l1loss_gray = to_image(l1loss[i].detach().cpu().numpy()*10)
-            cv2.imwrite(f'temp/{i}_l1loss_gray.png', l1loss_gray)
+        # for i in range(bs):
+        #     z_gray = to_image(z[i].cpu().numpy()*10)
+        #     cv2.imwrite(f'temp/{i}_z_gray.png', z_gray)
+        #     mask_gray = to_image(self.mask[i].cpu().numpy()*200)
+        #     cv2.imwrite(f'temp/{i}_mask_gray.png', mask_gray)
+        #     reproj_rgb = np.concatenate([reproj[i].detach().cpu().permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(reproj.shape[2:]), axis=-1)], axis=-1)
+        #     reproj_rgb = to_image(reproj_rgb)
+        #     uv_rgb = np.concatenate([self.uv[i].cpu().permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(self.uv.shape[2:]), axis=-1)], axis=-1)
+        #     uv_rgb = to_image(uv_rgb)
+        #     cv2.imwrite(f'temp/{i}_reproj_rgb.png', reproj_rgb)
+        #     cv2.imwrite(f'temp/{i}_uv_rgb.png', uv_rgb)
+        #     flow_rgb = np.concatenate([self.flow[i].cpu().permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(self.flow.shape[2:]), axis=-1)], axis=-1)*10
+        #     flow_rgb = to_image(flow_rgb)
+        #     cv2.imwrite(f'temp/{i}_flow.png', flow_rgb)
+        #     flow_dest = self.flow[i].cpu() + self.uv[i].cpu()
+        #     flow_dest_rgb = np.concatenate([flow_dest.permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(flow_dest.shape[1:]), axis=-1)], axis=-1)
+        #     flow_dest_rgb = to_image(flow_dest_rgb)
+        #     cv2.imwrite(f'temp/{i}_flow_dest_rgb.png', flow_dest_rgb)
+        #     reproj_flow = reproj[i].detach().cpu() - self.uv[i].cpu()
+        #     reproj_flow_rgb = np.concatenate([reproj_flow.permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(reproj_flow.shape[1:]), axis=-1)], axis=-1)*10
+        #     reproj_flow_rgb = to_image(reproj_flow_rgb)
+        #     cv2.imwrite(f'temp/{i}_reproj_flow_rgb.png', reproj_flow_rgb)
+        #     l1loss_gray = to_image(l1loss[i].detach().cpu().numpy()*10)
+        #     cv2.imwrite(f'temp/{i}_l1loss_gray.png', l1loss_gray)
 
-        quit()
+        # quit()
+
+        return loss
+    
+
+class SparseReprojectionLoss:
+    def __init__(self, points2d, depth, flow, fx, fy, cx, cy, rgb2imu_pose, device='cuda:0'):
+        # (batch, channel, height, width)
+        assert len(flow.shape) == 4
+        # (batch, height, width)
+        assert len(depth.shape) == 3
+        # (batch, N, 2)
+        assert len(points2d.shape) == 3
+
+        bs, N = points2d.shape[:2]
+        idx = torch.cat([torch.arange(0, bs).repeat_interleave(N).view(bs, N, 1), points2d], dim=-1).view(-1, 3).to(int)
+        points2d = points2d.to(device)
+        idx = idx.to(device)
+
+        self.K = torch.tensor([fx, 0, cx, 0, fy, cy, 0, 0, 1], dtype=torch.float32).view(3, 3).to(device)
+        self.point3d = pixel2point(points2d, depth[idx[..., 0], idx[..., 1], idx[..., 2]].view(bs, N), self.K).to(device)
+
+        self.target = (flow.permute(0, 2, 3, 1)[idx[..., 0], idx[..., 1], idx[..., 2], :].view(bs, N, 2) + points2d).to(device)
+
+        self.N = N
+        self.rgb2imu_pose = rgb2imu_pose.to(device)
+
 
     def __call__(self, motion):
         T = self.rgb2imu_pose.Inv() @ motion @ self.rgb2imu_pose
-        z = self.z
-        K = self.K
-        uv1 = self.uv1
-        mask = self.mask
-        K_inv = self.K_inv
 
-        # back-project to 3D point
-        P = z.unsqueeze(-1) * (K_inv.view(1, 1, 1, 3, 3) @ uv1.permute(0, 2, 3, 1).unsqueeze(-1)).squeeze(-1)
-        # (): (b, x, y, c, 1)
-        # P: (b, x, y, c)
+        err = reprojerr(self.point3d, self.target, self.K, T.Inv(), reduction='none')
+        # err: (bs, N, 2)
 
-        # perform reprojection and calculate residual
-        P = T.Inv().lview(-1, 1, 1) @ P
-        p, reproj_mask = proj(P, return_mask=True)
-        mask = torch.logical_and(mask, reproj_mask)
-        reproj = K.view(1, 1, 1, 3, 3) @ p.unsqueeze(-1)
-        reproj = reproj.squeeze(-1).permute(0, 3, 1, 2)[:, :2, ...]
-        # reproj: (b, c, x, y)
-        r = reproj - (self.flow + self.uv)
+        return err
+    
 
-        bs = r.shape[0]
-        l1loss = torch.sum(torch.abs(r), dim=1)
-        # l1loss: (b, x, y)
-        # mask = torch.logical_and(mask, l1loss <= 10)
-        loss = []
-        for i in range(bs):
-            loss.append(torch.mean((l1loss[i])[mask[i]]))
-        loss = torch.stack(loss)
-        # loss: (b,)
+def FAST_point_detector(image, width, height, N=100):
+    image = (image.permute(0, 2, 3, 1).numpy() * 255).astype(np.uint8)
+    
+    fast = cv2.FastFeatureDetector_create()
+    fast2 = cv2.FastFeatureDetector_create()
+    fast2.setNonmaxSuppression(0)
 
-        # debug
+    point2d = []
+    for i in range(image.shape[0]):
+        gray = cv2.cvtColor(image[i], cv2.COLOR_BGR2GRAY)
+        gray = cv2.resize(gray, (height, width))
+        keypoint = fast.detect(gray, None)
 
-        def to_image(x):
-            return np.clip(np.abs(x), 0, 255).astype(np.uint8)
-        
-        for i in range(bs):
-            z_gray = to_image(z[i].cpu().numpy()*10)
-            cv2.imwrite(f'temp/{i}_z_gray.png', z_gray)
-            mask_gray = to_image(self.mask[i].cpu().numpy()*200)
-            cv2.imwrite(f'temp/{i}_mask_gray.png', mask_gray)
-            reproj_rgb = np.concatenate([reproj[i].detach().cpu().permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(reproj.shape[2:]), axis=-1)], axis=-1)
-            reproj_rgb = to_image(reproj_rgb)
-            uv_rgb = np.concatenate([self.uv[i].cpu().permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(self.uv.shape[2:]), axis=-1)], axis=-1)
-            uv_rgb = to_image(uv_rgb)
-            cv2.imwrite(f'temp/{i}_reproj_rgb.png', reproj_rgb)
-            cv2.imwrite(f'temp/{i}_uv_rgb.png', uv_rgb)
-            flow_rgb = np.concatenate([self.flow[i].cpu().permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(self.flow.shape[2:]), axis=-1)], axis=-1)*10
-            flow_rgb = to_image(flow_rgb)
-            cv2.imwrite(f'temp/{i}_flow.png', flow_rgb)
-            flow_dest = self.flow[i].cpu() + self.uv[i].cpu()
-            flow_dest_rgb = np.concatenate([flow_dest.permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(flow_dest.shape[1:]), axis=-1)], axis=-1)
-            flow_dest_rgb = to_image(flow_dest_rgb)
-            cv2.imwrite(f'temp/{i}_flow_dest_rgb.png', flow_dest_rgb)
-            reproj_flow = reproj[i].detach().cpu() - self.uv[i].cpu()
-            reproj_flow_rgb = np.concatenate([reproj_flow.permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(reproj_flow.shape[1:]), axis=-1)], axis=-1)*10
-            reproj_flow_rgb = to_image(reproj_flow_rgb)
-            cv2.imwrite(f'temp/{i}_reproj_flow_rgb.png', reproj_flow_rgb)
-            l1loss_gray = to_image(l1loss[i].detach().cpu().numpy()*10)
-            cv2.imwrite(f'temp/{i}_l1loss_gray.png', l1loss_gray)
+        if len(keypoint) < N:
+            keypoint = fast2.detect(gray, None)
+            assert len(keypoint) >= N
 
-        quit()
-
-        return loss
+        keypoint = list(keypoint)
+        random.shuffle(keypoint)
+        point2d.append([[kp.pt[1], kp.pt[0]] for kp in keypoint[:N]])
+    
+    point2d = torch.tensor(point2d)
+    return point2d

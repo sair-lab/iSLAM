@@ -36,7 +36,7 @@ conda activate iSLAM
 data_dir=/data/kitti/2011_09_30/2011_09_30_drive_0018_sync
 # data_dir=$1
 
-loss_weight='(1,0.1,10,0.1,0)'
+loss_weight='(1,0.1,10,0.1,0.01)'
 rot_w=1
 trans_w=0.1
 batch_size=8
