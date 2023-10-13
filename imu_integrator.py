@@ -98,7 +98,7 @@ class IMUModule:
             if self.denoise_gyro:
                 gyros = denoised_gyros
 
-        has_imu = torch.ones(end-st, dtype=bool)
+        # has_imu = torch.ones(end-st, dtype=bool)
         for i in range(st, end):
             imu_frame_st = self.rgb2imu_sync[i] - imu_batch_st
             imu_frame_end = self.rgb2imu_sync[i+1] - imu_batch_st
@@ -146,7 +146,7 @@ class IMUModule:
         rots = torch.stack(rots, axis=0)
         vels = torch.stack(vels, axis=0)
 
-        return poses, rots, covs, vels, has_imu
+        return poses, rots, covs, vels
 
 
 if __name__ == '__main__':
