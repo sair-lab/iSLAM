@@ -57,6 +57,8 @@ def get_args():
                         help='use vo reverse edge in pvgo (default: False)')
     parser.add_argument('--vo-right-cam', action='store_true', default=False,
                         help='use right camera vo in pvgo (default: False)')
+    parser.add_argument('--reproj-points', type=int, default=0,
+                        help='number of points used in reproection error (default: 0)')
 
     args = parser.parse_args()
     args.loss_weight = eval(args.loss_weight)   # string to tuple

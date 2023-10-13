@@ -64,7 +64,7 @@ class IMUModule:
             pos, rot, vel in world frame
         motion_mode True : 
             rot = relative rotation from t to t+1 in t's frame
-            vel = delta velocity from t tpo t+1 in wolrd frame
+            vel = delta velocity from t to t+1 in wolrd frame
             pos = relative translation cased only by acceleration (assume zero initial speed) in world frame
 
         rgb2imu_sync[rgb_frame_idx] = imu_frame_idx at the same time
@@ -97,23 +97,38 @@ class IMUModule:
                 accels = denoised_accels
             if self.denoise_gyro:
                 gyros = denoised_gyros
-        
+
+        has_imu = torch.ones(end-st, dtype=bool)
         for i in range(st, end):
             imu_frame_st = self.rgb2imu_sync[i] - imu_batch_st
             imu_frame_end = self.rgb2imu_sync[i+1] - imu_batch_st
             
+            # if imu_frame_st == imu_frame_end:
+            #     has_imu[i-st] = False
+            #     dtype = accels.dtype
+            #     dt = torch.ones((1, 1), dtype=dtype).to(self.device) * self.last_frame_dt
+            #     gyro = torch.zeros((1, 3), dtype=dtype).to(self.device)
+            #     acc = torch.zeros((1, 3), dtype=dtype).to(self.device)
+            # else:
+            #     dt = dts[imu_frame_st:imu_frame_end]
+            #     self.last_frame_dt = torch.sum(dt)
+            #     gyro = gyros[imu_frame_st:imu_frame_end]
+            #     acc = accels[imu_frame_st:imu_frame_end]
+            
+            # state = self.integrator(dt=dt, gyro=gyro, acc=acc, init_state=last_state)
+
             if imu_frame_st == imu_frame_end:
                 dtype = accels.dtype
-                dt = torch.ones((1, 1), dtype=dtype).to(self.device) * self.last_frame_dt
-                gyro = torch.zeros((1, 3), dtype=dtype).to(self.device)
-                acc = torch.zeros((1, 3), dtype=dtype).to(self.device)
+                if motion_mode:
+                    state['pos'] = torch.zeros((1, 3), dtype=dtype).to(self.device)
+                    state['vel'] = torch.zeros((1, 3), dtype=dtype).to(self.device)
+                else:
+                    state['vel'] = torch.zeros((1, 3), dtype=dtype).to(self.device)
             else:
                 dt = dts[imu_frame_st:imu_frame_end]
-                self.last_frame_dt = torch.sum(dt)
                 gyro = gyros[imu_frame_st:imu_frame_end]
                 acc = accels[imu_frame_st:imu_frame_end]
-            
-            state = self.integrator(dt=dt, gyro=gyro, acc=acc, init_state=last_state)
+                state = self.integrator(dt=dt, gyro=gyro, acc=acc, init_state=last_state)
 
             poses.append(state['pos'][..., -1, :].squeeze().cpu())
             vels.append(state['vel'][..., -1, :].squeeze().cpu())
@@ -131,7 +146,7 @@ class IMUModule:
         rots = torch.stack(rots, axis=0)
         vels = torch.stack(vels, axis=0)
 
-        return poses, rots, covs, vels
+        return poses, rots, covs, vels, has_imu
 
 
 if __name__ == '__main__':

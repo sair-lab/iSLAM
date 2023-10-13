@@ -111,7 +111,7 @@ class PoseVelGraph(nn.Module):
 
 def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtrans, imu_dvels, 
                 device='cuda:0', radius=1e4, loss_weight=(1,1,1,1), reproj=None):
-
+    
     # information matrix
     vo_motions_cpu = vo_motions.detach().cpu()
     vo_rot_norms = torch.norm(vo_motions_cpu.rotation().Log(), dim=1).numpy()
@@ -207,5 +207,7 @@ def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtran
     covs = {'vo_rot':vo_rot_infos, 'imu_rot':imu_rot_infos,
             'vo_trans':vo_trans_infos, 'imu_vel':imu_vel_infos,
             'transvel':transvel_infos}
+    if reproj is not None:
+        covs['reproj'] = reproj_infos
 
     return trans_loss, rot_loss, nodes, vels, covs

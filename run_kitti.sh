@@ -36,13 +36,14 @@ conda activate iSLAM
 data_dir=/data/kitti/2011_09_30/2011_09_30_drive_0018_sync
 # data_dir=$1
 
-loss_weight='(1,0.1,10,0.1,0.01)'
+loss_weight='(1,0.1,10,0.1,0.1)'
 rot_w=1
 trans_w=0.1
 batch_size=8
 lr=3e-6
 epoch=1
 train_portion=1
+reproj_points=20
 
 use_scale=false
 if [ "$use_scale" = true ]; then
@@ -53,7 +54,7 @@ fi
 
 project_name=test_kitti_reproj
 # project_name=$2
-train_name=${rot_w}Ra_${trans_w}ta_delayOptm_lr=${lr}_${loss_weight}_${exp_type}
+train_name=exp_lr=${lr}_lw=${loss_weight}_SIFT_rp=${reproj_points}_${exp_type}
 
 echo "=============================================="
 echo "project name = ${project_name}"
@@ -89,6 +90,7 @@ if [ "$use_scale" = true ]; then
         --rot-w ${rot_w} \
         --trans-w ${trans_w} \
         --train-portion ${train_portion} \
+        --reproj-points ${reproj_points} \
         --use-gt-scale
 else
     # stereo: calc scale
@@ -112,5 +114,6 @@ else
         --fix-model-parts 'flow' 'stereo' \
         --rot-w ${rot_w} \
         --trans-w ${trans_w} \
-        --train-portion ${train_portion}
+        --train-portion ${train_portion} \
+        --reproj-points ${reproj_points}
 fi

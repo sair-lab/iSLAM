@@ -1,9 +1,8 @@
 import cv2
 import torch
-import random
 import numpy as np
 import pypose as pp
-from pypose.function.geometry import reprojerr
+from pypose.function.geometry import reprojerr, point2pixel
 
 
 # Shoule use the pypose built-in version after new release!!!
@@ -174,28 +173,6 @@ def scale_from_disp_flow(disp, flow, motion, fx, fy, cx, cy, baseline, depth=Non
     # reproj = reproj.squeeze().permute(2, 0, 1)[:2, ...]
     # r = reproj - (flow + uv)
 
-    # debug
-
-    # z_gray = to_image(z.numpy()*10)
-    # cv2.imwrite('z_gray.png', z_gray)
-
-    # reproj_rgb = np.concatenate([reproj.permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(reproj.shape[1:]), axis=-1)], axis=-1)*0.5
-    # reproj_rgb = to_image(reproj_rgb)
-    # uv_rgb = np.concatenate([uv.permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(uv.shape[1:]), axis=-1)], axis=-1)*0.5
-    # uv_rgb = to_image(uv_rgb)
-    # cv2.imwrite('reproj_rgb.png', reproj_rgb)
-    # cv2.imwrite('uv_rgb.png', uv_rgb)
-
-    # flow_dest = flow + uv
-    # flow_dest_rgb = np.concatenate([flow_dest.permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(flow_dest.shape[1:]), axis=-1)], axis=-1)*0.5
-    # cv2.imwrite('flow_dest_rgb.png', flow_dest_rgb)
-    # reproj_flow = reproj - uv
-    # reproj_flow_rgb = np.concatenate([reproj_flow.permute(1, 2, 0).numpy(), np.expand_dims(np.zeros(reproj_flow.shape[1:]), axis=-1)], axis=-1)*0.5
-    # cv2.imwrite('reproj_flow_rgb.png', reproj_flow_rgb)
-
-    # print(z.shape, z.device, mask.shape, mask.device)
-    # print(torch.min(z[mask]), torch.max(z[mask]))
-
     return s, z.squeeze(), mask.squeeze(), depth_mask.squeeze()
 
 
@@ -306,7 +283,7 @@ class SparseReprojectionLoss:
         assert len(points2d.shape) == 3
 
         bs, N = points2d.shape[:2]
-        idx = torch.cat([torch.arange(0, bs).repeat_interleave(N).view(bs, N, 1), points2d], dim=-1).view(-1, 3).to(int)
+        idx = torch.cat([torch.arange(0, bs).repeat_interleave(N).view(bs, N, 1), points2d[..., (1,0)]], dim=-1).to(int)
         points2d = points2d.to(device)
         idx = idx.to(device)
 
@@ -328,26 +305,71 @@ class SparseReprojectionLoss:
         return err
     
 
-def FAST_point_detector(image, width, height, N=100):
+    def debug(self, motion, img0, img1, width, height, scale=4):
+        device = self.point3d.device
+
+        img0 = (img0.permute(0, 2, 3, 1).numpy() * 255).astype(np.uint8)
+        img1 = (img1.permute(0, 2, 3, 1).numpy() * 255).astype(np.uint8)
+        
+        T = self.rgb2imu_pose.Inv() @ motion.to(device) @ self.rgb2imu_pose
+        pts0 = point2pixel(self.point3d, self.K).cpu().numpy()
+        pts1 = point2pixel(self.point3d, self.K, T.Inv()).cpu().numpy()
+        mask = np.tile(np.logical_and(
+            np.logical_and(pts1[..., 0] >= 0, pts1[..., 0] < width),
+            np.logical_and(pts1[..., 1] >= 0, pts1[..., 1] < height)
+        )[..., np.newaxis], (1, 1, 2))
+        pts1[np.logical_not(mask)] = 0
+
+        target = self.target.cpu().numpy()
+
+        error = reprojerr(self.point3d, self.target, self.K, T.Inv(), reduction='none').cpu().numpy()
+
+        for i, (il, ir, pl, pr, tar, err) in enumerate(zip(img0, img1, pts0, pts1, target, error)):
+            il = cv2.resize(il, (width*scale, height*scale))
+            ir = cv2.resize(ir, (width*scale, height*scale))
+
+            for p in pl:
+                cv2.circle(il, np.round(p*scale).astype(int), 2, (0,0,255))
+            for p in pr:
+                cv2.circle(ir, np.round(p*scale).astype(int), 2, (0,0,255))
+
+            ilr = cv2.hconcat([il, ir])
+            for st, end, t, e in zip(pl, pr, tar, err):
+                end[0] += width
+                t[0] += width
+                assert np.all(np.abs(e - (end-t)) < 1e-3)
+                cv2.line(ilr, np.round(st*scale).astype(int), np.round(end*scale).astype(int), (255,0,0))
+                cv2.line(ilr, np.round(t*scale).astype(int), np.round(end*scale).astype(int), (0,255,0))
+
+            cv2.imwrite(f'temp/{i}_reproj.png', ilr)
+
+
+def FAST_point_detector(image, width, height, N=100, mask=None):
     image = (image.permute(0, 2, 3, 1).numpy() * 255).astype(np.uint8)
+    if mask is not None:
+        mask = mask.cpu().numpy()
     
-    fast = cv2.FastFeatureDetector_create()
-    fast2 = cv2.FastFeatureDetector_create()
-    fast2.setNonmaxSuppression(0)
+    # detector = cv2.FastFeatureDetector_create()
+    detector = cv2.SIFT_create()
 
     point2d = []
     for i in range(image.shape[0]):
         gray = cv2.cvtColor(image[i], cv2.COLOR_BGR2GRAY)
-        gray = cv2.resize(gray, (height, width))
-        keypoint = fast.detect(gray, None)
+        gray = cv2.resize(gray, (width, height))
+        keypoint = detector.detect(gray, None)
 
-        if len(keypoint) < N:
-            keypoint = fast2.detect(gray, None)
-            assert len(keypoint) >= N
+        pts = np.floor(np.array([kp.pt for kp in keypoint], dtype=np.float32))
+        if mask is not None:
+            idx = pts[:, (1, 0)].astype(int)
+            pts = pts[mask[i, idx[:, 0], idx[:, 1]]]
 
-        keypoint = list(keypoint)
-        random.shuffle(keypoint)
-        point2d.append([[kp.pt[1], kp.pt[0]] for kp in keypoint[:N]])
+        while len(pts) < N:
+            new_pt = np.array([np.random.randint(width), np.random.randint(height)], dtype=np.float32)
+            if mask is None or mask[i, int(new_pt[1]), int(new_pt[0])]:
+                pts = np.concatenate([pts, new_pt.reshape(1, 2)], axis=0) 
+
+        np.random.shuffle(pts)
+        point2d.append(pts[:N])
     
-    point2d = torch.tensor(point2d)
+    point2d = torch.tensor(np.stack(point2d))
     return point2d

@@ -317,65 +317,88 @@ if __name__ == '__main__':
         st = current_idx
         end = current_idx + args.batch_size
 
-        imu_trans, imu_rots, imu_covs, imu_vels = imu_module.integrate(st, end, init_state, motion_mode=False)
+        imu_trans, imu_rots, imu_covs, imu_vels, has_imu = imu_module.integrate(
+            st, end, init_state, motion_mode=False
+        )
         imu_poses = pp.SE3(torch.cat((imu_trans, imu_rots.tensor()), axis=1))
         imu_motions = pose2motion_pypose(imu_poses)
         imu_poses_list.extend(imu_poses[1:].numpy())
         imu_motions_list.extend(imu_motions.numpy())
 
-        imu_dtrans, imu_drots, imu_dcovs, imu_dvels = imu_module.integrate(st, end, init_state, motion_mode=True)
+        imu_dtrans, imu_drots, imu_dcovs, imu_dvels, has_imu = imu_module.integrate(
+            st, end, init_state, motion_mode=True
+        )
+
+        if not torch.all(has_imu):
+            print('!'*50+'\n', 'Incomplete IMU data!\n', '!'*50)
 
         timer.toc('imu')
         
         ############################## run PVGO ######################################################################
         timer.tic('pgo')
 
-        dts = sample['dt']
-        links = base_links = sample['link'] - current_idx
+        if torch.all(has_imu):
+            dts = sample['dt']
+            links = base_links = sample['link'] - current_idx
 
-        if args.vo_reverse_edge:
-            motions = torch.cat([motions, motions_rev], dim=0)
-            links = torch.cat([links, base_links[:, (1,0)]], dim=0)
-            # print(links)
-            # print(motions.shape)
-        
-        if args.vo_right_cam:
-            motions = torch.cat([motions, motions_rcam], dim=0)
-            links = torch.cat([links, base_links], dim=0)
-            # print(links)
-            # print(motions.shape)
+            if args.vo_reverse_edge:
+                motions = torch.cat([motions, motions_rev], dim=0)
+                links = torch.cat([links, base_links[:, (1,0)]], dim=0)
+                # print(links)
+                # print(motions.shape)
+            
+            if args.vo_right_cam:
+                motions = torch.cat([motions, motions_rcam], dim=0)
+                links = torch.cat([links, base_links], dim=0)
+                # print(links)
+                # print(motions.shape)
 
-        if keyframes is not None:
-            a = torch.searchsorted(keyframes, current_idx, right=False)
-            b = torch.searchsorted(keyframes, current_idx+args.batch_size, right=True)
-            if b - a > 1:
-                loop_motions = pose2motion_pypose(loopclosure_poses[a:b]).tensor()
-                loop_links = torch.tensor([[keyframes[i], keyframes[i+1]] for i in range(a, b-1)]) - current_idx
-                motions = torch.cat([motions, loop_motions.to(motions.device)], dim=0)
-                links = torch.cat([links, loop_links], dim=0)
-            # print(links)
-            # print(motions.shape)
+            if keyframes is not None:
+                a = torch.searchsorted(keyframes, current_idx, right=False)
+                b = torch.searchsorted(keyframes, current_idx+args.batch_size, right=True)
+                if b - a > 1:
+                    loop_motions = pose2motion_pypose(loopclosure_poses[a:b]).tensor()
+                    loop_links = torch.tensor([[keyframes[i], keyframes[i+1]] for i in range(a, b-1)]) - current_idx
+                    motions = torch.cat([motions, loop_motions.to(motions.device)], dim=0)
+                    links = torch.cat([links, loop_links], dim=0)
+                # print(links)
+                # print(motions.shape)
 
-        if len(args.loss_weight) == 5:
-            height, width = vo_result['depth'].shape[-2:]
-            point2d = FAST_point_detector(sample['img0'], height, width, N=10)
-            fx, fy, cx, cy = vo_result['intrinsic']
-            reproj = SparseReprojectionLoss(
-                point2d, vo_result['depth'], vo_result['flow'], 
-                fx, fy, cx, cy, dataset.rgb2imu_pose, motions.device
+            if len(args.loss_weight) == 5 and args.reproj_points > 0:
+                height, width = vo_result['depth'].shape[-2:]
+                point2d = FAST_point_detector(sample['img0'], width, height, 
+                                              N=args.reproj_points, mask=vo_result['mask'])
+                fx, fy, cx, cy = vo_result['intrinsic']
+                reproj = SparseReprojectionLoss(
+                    point2d, vo_result['depth'], vo_result['flow'], 
+                    fx, fy, cx, cy, dataset.rgb2imu_pose, motions.device
+                )
+                # reproj.debug(imu_poses[:-1].Inv() @ imu_poses[1:], 
+                #              sample['img0'], sample['img1'], width, height)
+                # quit()
+            else:
+                reproj = None
+
+            trans_loss, rot_loss, pgo_poses, pgo_vels, covs = run_pvgo(
+                imu_poses, imu_vels,
+                motions, links, dts,
+                imu_drots, imu_dtrans, imu_dvels,
+                device='cuda', radius=1e4,
+                loss_weight=args.loss_weight,
+                reproj=reproj
             )
-        else:
-            reproj = None
+            pgo_motions = pose2motion_pypose(pgo_poses)
 
-        trans_loss, rot_loss, pgo_poses, pgo_vels, covs = run_pvgo(
-            imu_poses, imu_vels,
-            motions, links, dts,
-            imu_drots, imu_dtrans, imu_dvels,
-            device='cuda', radius=1e4,
-            loss_weight=args.loss_weight,
-            reproj=reproj
-        )
-        pgo_motions = pose2motion_pypose(pgo_poses)
+        else:
+            trans_loss = rot_loss = None
+            pgo_poses = poses_vo.detach().cpu()
+            pgo_motions = motions.detach().cpu()
+            pgo_vels = torch.cat([
+                torch.tensor(pgo_vels_list[-1]).unsqueeze(0),
+                torch.diff(pgo_poses.translation(), dim=0) / sample['dt'].unsqueeze(-1)
+            ], dim=0)
+            for k in covs.keys():
+                covs[k][...] = 0
 
         pgo_motions = pgo_motions.numpy()
         pgo_poses = pgo_poses.numpy()
@@ -395,23 +418,24 @@ if __name__ == '__main__':
         ############################## backpropagation ######################################################################
         timer.tic('opt')
 
-        # generate mask according to the portion of training
-        if args.train_portion >= 1:
-            rot_mask = np.ones(motions.shape[0]).astype(bool)
-            trans_mask = np.ones(motions.shape[0]).astype(bool)
-        else:
-            rot_mask = np.zeros(motions.shape[0]).astype(bool)
-            trans_mask = np.zeros(motions.shape[0]).astype(bool)
-            itv = int(1 / args.train_portion)
-            for i in range(R_norms.shape[0]):
-                if (current_idx + i) % itv == 0:
-                    rot_mask[i] = True
-                    trans_mask[i] = True
+        if torch.all(has_imu):
+            # generate mask according to the portion of training
+            if args.train_portion >= 1:
+                rot_mask = np.ones(motions.shape[0]).astype(bool)
+                trans_mask = np.ones(motions.shape[0]).astype(bool)
+            else:
+                rot_mask = np.zeros(motions.shape[0]).astype(bool)
+                trans_mask = np.zeros(motions.shape[0]).astype(bool)
+                itv = int(1 / args.train_portion)
+                for i in range(R_norms.shape[0]):
+                    if (current_idx + i) % itv == 0:
+                        rot_mask[i] = True
+                        trans_mask[i] = True
 
-        if np.any(rot_mask) or np.any(trans_mask):
-            loss_bp = torch.cat((args.rot_w * rot_loss[rot_mask], args.trans_w * trans_loss[trans_mask]))
-            # only backpropagate, no optimize
-            loss_bp.backward(torch.ones_like(loss_bp))
+            if np.any(rot_mask) or np.any(trans_mask):
+                loss_bp = torch.cat((args.rot_w * rot_loss[rot_mask], args.trans_w * trans_loss[trans_mask]))
+                # only backpropagate, no optimize
+                loss_bp.backward(torch.ones_like(loss_bp))
 
         timer.toc('opt')
 
