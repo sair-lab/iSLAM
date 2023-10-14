@@ -33,17 +33,17 @@ conda activate iSLAM
 
 # data_dir=/projects/academic/cwx/kitti_raw/2011_10_03/2011_10_03_drive_0027_sync
 # data_dir=/home/data2/kitti_raw/2011_10_03/2011_10_03_drive_0042_sync
-data_dir=/data/kitti/2011_09_30/2011_09_30_drive_0018_sync
-# data_dir=$1
+# data_dir=/data/kitti/2011_09_30/2011_09_30_drive_0018_sync
+data_dir=$1
 
-loss_weight='(1,0.1,10,0.1,0.1)'
+loss_weight='(1,0.1,10,0.1)'
 rot_w=1
 trans_w=0.1
 batch_size=8
 lr=3e-6
-epoch=1
+epoch=17
 train_portion=1
-reproj_points=20
+reproj_points=0
 
 use_scale=false
 if [ "$use_scale" = true ]; then
@@ -52,9 +52,9 @@ else
     exp_type='stereo'
 fi
 
-project_name=test_kitti_reproj
-# project_name=$2
-train_name=exp_lr=${lr}_lw=${loss_weight}_SIFT_rp=${reproj_points}_${exp_type}
+# project_name=test_kitti_rev
+project_name=$2
+train_name=exp_bs=${batch_size}_lr=${lr}_lw=${loss_weight}_${exp_type}
 
 echo "=============================================="
 echo "project name = ${project_name}"

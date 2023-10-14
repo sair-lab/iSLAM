@@ -258,15 +258,23 @@ if __name__ == '__main__':
 
         if args.vo_reverse_edge:
             sample_rev = reverse_sample(sample, False)
-            motions_rev = tartanvo(sample_rev)
+            if not args.use_gt_scale:
+                scales = torch.norm(motions.detach().translation(), dim=1)
+                motions_rev = tartanvo(sample_rev, given_scale=scales)['motion']
+            else:
+                motions_rev = tartanvo(sample_rev)['motion']
             motions_rev = T_IL @ motions_rev @ T_IL.Inv()
+            
 
         if args.vo_right_cam:
             sample_rcam = reverse_sample(sample, True)
             T_IR = T_IL @ dataset.right2left_pose.to(T_IL.device)
-            motions_in_rcam = T_IR.Inv() @ motions.detach() @ T_IR
-            scales_in_rcam = torch.norm(motions_in_rcam.translation(), dim=1)
-            motions_rcam = tartanvo(sample_rcam, given_scale=scales_in_rcam)
+            if not args.use_gt_scale:
+                motions_in_rcam = T_IR.Inv() @ motions.detach() @ T_IR
+                scales_in_rcam = torch.norm(motions_in_rcam.translation(), dim=1)
+                motions_rcam = tartanvo(sample_rcam, given_scale=scales_in_rcam)['motion']
+            else:
+                motions_rcam = tartanvo(sample_rcam)['motion']
             motions_rcam = T_IR @ motions_rcam @ T_IR.Inv()
 
         timer.toc('vo')

@@ -40,8 +40,9 @@ rot_w=1
 trans_w=0.1
 batch_size=8
 lr=3e-6
-epoch=1
+epoch=17
 train_portion=1
+reproj_points=0
 
 use_scale=false
 if [ "$use_scale" = true ]; then
@@ -52,7 +53,7 @@ fi
 
 # project_name=test_euroc_denoise
 project_name=$2
-train_name=${rot_w}Ra_${trans_w}ta_delayOptm_lr=${lr}_${loss_weight}_${exp_type}
+train_name=exp_bs=${batch_size}_lr=${lr}_lw=${loss_weight}_${exp_type}
 
 echo "=============================================="
 echo "project name = ${project_name}"
@@ -65,7 +66,7 @@ mkdir -p train_results/${project_name}/${train_name}
 rm -r train_results_models/${project_name}/${train_name}
 mkdir -p train_results_models/${project_name}/${train_name}
 
-if [ "$use_scale" = false ]; then
+if [ "$use_scale" = true ]; then
     # mono: use gt scale
     python train.py \
         --result-dir train_results/${project_name}/${train_name} \
@@ -88,8 +89,8 @@ if [ "$use_scale" = false ]; then
         --rot-w ${rot_w} \
         --trans-w ${trans_w} \
         --train-portion ${train_portion} \
-        --use-gt-scale \
-        --vo-right-cam
+        --reproj-points ${reproj_points} \
+        --use-gt-scale
 else
     # stereo: calc scale
     python train.py \
@@ -113,5 +114,5 @@ else
         --rot-w ${rot_w} \
         --trans-w ${trans_w} \
         --train-portion ${train_portion} \
-        --vo-right-cam
+        --reproj-points ${reproj_points}
 fi
