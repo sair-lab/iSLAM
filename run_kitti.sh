@@ -75,6 +75,7 @@ if [ "$use_scale" = true ]; then
         --project-name ${project_name} \
         --train-name ${train_name} \
         --vo-model-name ./models/stereo_cvt_tartanvo_1914.pkl \
+        --imu-denoise-model-name ./models/imu_denoise_kitti.pkl \
         --batch-size ${batch_size} \
         --worker-num 2 \
         --data-root ${data_dir} \
@@ -100,6 +101,7 @@ else
         --project-name ${project_name} \
         --train-name ${train_name} \
         --vo-model-name ./models/stereo_cvt_tartanvo_1914.pkl \
+        --imu-denoise-model-name ./models/imu_denoise_kitti.pkl \
         --batch-size ${batch_size} \
         --worker-num 2 \
         --data-root ${data_dir} \

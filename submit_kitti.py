@@ -26,7 +26,7 @@ data_name = [
 for dn in data_name:
     date = dn[:10]
     dir = data_root + '/' + date + '/' + dn + '_sync'
-    res_name = dn + '_orig'
+    res_name = dn + '_denoise'
 
     if machine == 'ccr':
         cmd = "sbatch run_kitti.sh {} {}".format(dir, res_name)
