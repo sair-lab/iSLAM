@@ -32,7 +32,7 @@ conda activate iSLAM
 # export CUDA_VISIBLE_DEVICES=1
 
 # data_dir=/projects/academic/cwx/euroc/V2_03_difficult/mav0
-# data_dir=/data/euroc/V2_03_difficult/mav0
+# data_dir=/data/euroc/MH_01_easy/mav0
 data_dir=$1
 
 loss_weight='(4,0.1,2,0.1)'
@@ -51,7 +51,7 @@ else
     exp_type='stereo'
 fi
 
-# project_name=test_euroc_denoise
+# project_name=test_euroc_denoisevo
 project_name=$2
 train_name=exp_bs=${batch_size}_lr=${lr}_lw=${loss_weight}_${exp_type}
 
@@ -75,6 +75,7 @@ if [ "$use_scale" = true ]; then
         --train-name ${train_name} \
         --vo-model-name ./models/stereo_cvt_tartanvo_1914.pkl \
         --imu-denoise-model-name ./models/imu_denoise_euroc.pkl \
+        --pose-model-name ./models/vonet_euroc.pkl \
         --batch-size ${batch_size} \
         --worker-num 2 \
         --data-root ${data_dir} \
@@ -101,6 +102,7 @@ else
         --train-name ${train_name} \
         --vo-model-name ./models/stereo_cvt_tartanvo_1914.pkl \
         --imu-denoise-model-name ./models/imu_denoise_euroc.pkl \
+        --pose-model-name ./models/vonet_euroc.pkl \
         --batch-size ${batch_size} \
         --worker-num 2 \
         --data-root ${data_dir} \

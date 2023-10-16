@@ -148,7 +148,7 @@ if __name__ == '__main__':
     ############################## init VO model ######################################################################
     if args.start_epoch == 1:
         tartanvo = TartanVO(
-            vo_model_name=args.vo_model_name, 
+            vo_model_name=args.vo_model_name, pose_model_name=args.pose_model_name,
             correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts
         )
     else:
