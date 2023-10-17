@@ -4,41 +4,7 @@ import pypose as pp
 from Network.IMUDenoiseNet import IMUCorrector_CNN_GRU
 
 
-class IMUModule:
-    def __init__(self, accels, gyros, dts, init=None, gravity=9.81007, rgb2imu_sync=None, 
-                 device='cuda:0', denoise_model_name=None, denoise_accel=True, denoise_gyro=True):
-        
-        self.device = device
-        self.last_frame_dt = 0.1
-
-        if rgb2imu_sync is None:
-            self.rgb2imu_sync = [i for i in range(len(accels))]
-        else:
-            self.rgb2imu_sync = rgb2imu_sync
-
-        dtype = torch.get_default_dtype()
-        self.accels = torch.tensor(accels, dtype=dtype).to(device)
-        self.gyros = torch.tensor(gyros, dtype=dtype).to(device)
-        self.dts = torch.tensor(dts, dtype=dtype).unsqueeze(-1).to(device)
-
-        init_pos, init_rot, init_vel = self.prase_init(init)
-        self.integrator = pp.module.IMUPreintegrator(
-            init_pos, init_rot, init_vel, gravity=float(gravity)).to(device)
-
-        if denoise_model_name is not None and denoise_model_name != '' and (denoise_accel or denoise_gyro):
-            self.denoiser = IMUCorrector_CNN_GRU()
-            pretrain = torch.load(denoise_model_name)
-            self.denoiser.load_state_dict(pretrain)
-            self.denoiser = self.denoiser.to(device)
-
-            self.denoise_accel = denoise_accel
-            self.denoise_gyro = denoise_gyro
-
-        else:
-            self.denoiser = None
-
-
-    def prase_init(self, init=None, motion_mode=False):
+def prase_init(self, init=None, motion_mode=False):
         dtype = self.accels.dtype
 
         if init is not None:
@@ -58,6 +24,44 @@ class IMUModule:
         return init_pos, init_rot, init_vel
 
 
+class IMUModule:
+    def __init__(self, accels, gyros, dts, init=None, gravity=9.81007, rgb2imu_sync=None, 
+                 device='cuda:0', denoise_model_name=None, denoise_accel=True, denoise_gyro=True):
+        
+        self.device = device
+        self.last_frame_dt = 0.1
+
+        if rgb2imu_sync is None:
+            self.rgb2imu_sync = [i for i in range(len(accels))]
+        else:
+            self.rgb2imu_sync = rgb2imu_sync
+
+        dtype = torch.get_default_dtype()
+        self.accels = torch.tensor(accels, dtype=dtype).to(device)
+        self.gyros = torch.tensor(gyros, dtype=dtype).to(device)
+        self.dts = torch.tensor(dts, dtype=dtype).unsqueeze(-1).to(device)
+
+        self.use_denoise_model = denoise_model_name is not None and denoise_model_name != '' and (denoise_accel or denoise_gyro)
+        self.optm_bias = not use_denoise_model and (denoise_accel or denoise_gyro)
+
+        init_pos, init_rot, init_vel = prase_init(init)
+        self.integrator = pp.module.IMUPreintegrator(
+            init_pos, init_rot, init_vel, gravity=float(gravity)).to(device)
+
+        if self.optm_bias:
+            self.accel_bias = torch.zeros(3)
+            self.gyro_bias = torch.zeros(3)
+
+        if self.use_denoise_model:
+            self.denoiser = IMUCorrector_CNN_GRU()
+            pretrain = torch.load(denoise_model_name)
+            self.denoiser.load_state_dict(pretrain)
+            self.denoiser = self.denoiser.to(device)
+
+            self.denoise_accel = denoise_accel
+            self.denoise_gyro = denoise_gyro
+
+
     def integrate(self, st, end, init=None, motion_mode=False):
         '''
         motion_mode False: 
@@ -70,7 +74,7 @@ class IMUModule:
         rgb2imu_sync[rgb_frame_idx] = imu_frame_idx at the same time
         '''
         
-        init_pos, init_rot, init_vel = self.prase_init(init, motion_mode)
+        init_pos, init_rot, init_vel = prase_init(init, motion_mode)
 
         if motion_mode: 
             poses, rots, covs, vels = [], [], [], []
@@ -86,11 +90,17 @@ class IMUModule:
         imu_batch_st = self.rgb2imu_sync[st]
         imu_batch_end = self.rgb2imu_sync[end] + 1
 
-        dts = self.dts[imu_batch_st:imu_batch_end]
-        gyros = self.gyros[imu_batch_st:imu_batch_end]
-        accels = self.accels[imu_batch_st:imu_batch_end]
+        dts = self.dts[imu_batch_st:imu_batch_end].clone()
+        gyros = self.gyros[imu_batch_st:imu_batch_end].clone()
+        accels = self.accels[imu_batch_st:imu_batch_end].clone()
 
-        if self.denoiser is not None and imu_batch_end - imu_batch_st >= 10:
+        if self.optm_bias:
+            if self.denoise_accel:
+                accels -= self.accel_bias.view(1, 3)
+            if self.denoise_gyro:
+                gyros -= self.gyros_bias.view(1, 3)
+
+        if self.use_denoise_model and imu_batch_end - imu_batch_st >= 10:
             data = {'acc':accels, 'gyro':gyros}
             denoised_accels, denoised_gyros, acc_cov, gyro_cov = self.denoiser(data, eval=True)
             if self.denoise_accel:
@@ -147,6 +157,47 @@ class IMUModule:
         vels = torch.stack(vels, axis=0)
 
         return poses, rots, covs, vels
+
+
+class IMUFwd(nn.Module):
+    def __init__(self, accels, gyros, accel_bias, gyro_bias, dts, init, gravity, device):
+        dtype = torch.get_default_dtype()
+        self.accels = torch.tensor(accels, dtype=dtype).to(device)
+        self.gyros = torch.tensor(gyros, dtype=dtype).to(device)
+        self.dts = torch.tensor(dts, dtype=dtype).unsqueeze(-1).to(device)
+
+        self.accel_bias = nn.Parameter(accel_bias).to(device)
+        self.gyro_bias = nn.Parameter(gyro_bias).to(device)
+
+        init_pos, init_rot, init_vel = prase_init(init)
+        self.integrator = pp.module.IMUPreintegrator(
+            init_pos, init_rot, init_vel, gravity=float(gravity)).to(device)
+
+    def forward(self, poses, sync):
+        dts = self.dts
+        accels = self.accels - self.accel_bias.view(1, 3)
+        gyros = self.gyros - self.gyro_bias(1, 3)
+
+        state = self.integrator(dt=dts, gyro=gyros, acc=accels)
+        print(state['rot'][..., sync, :].squeeze().shape)
+
+        roterr = (poses.rotation().Inv() @ state['rot'][..., sync, :].squeeze()).Log().norm()
+        transerr = torch.nn.functional.mse_loss((poses.translation(), state['pos'][..., sync, :].squeeze()))
+
+        return roterr + transerr
+                
+
+def optm_bias(lr, epoch, poses, sync, accels, gyros, accel_bias, gyro_bias, dts, init, gravity, device='cuda:0'):
+    imu = IMUFwd(accels, gyros, accel_bias, gyro_bias, dts, init, gravity, device)
+    optimizer = torch.optim.Adam(imu.parameters(), lr=lr)
+    scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.2, patience=2)
+
+    for epoch_i in range(epoch):
+        loss = imu(pose, sync)
+        scheduler.step(loss)
+        paint('IMU loss:', loss.itme())
+
+    return imu.accel_bias.detach(), imu.gyro_bias.detach()
 
 
 if __name__ == '__main__':

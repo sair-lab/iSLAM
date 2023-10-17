@@ -8,8 +8,8 @@ from TartanVO import TartanVO
 from mapper import Mapper
 
 from pvgo import run_pvgo
-from imu_integrator import IMUModule
 from loop_closure import LoopClosure
+from imu_integrator import IMUModule, optm_bias
 
 import torch
 import torch.optim as optim
@@ -230,6 +230,14 @@ if __name__ == '__main__':
             vo_optimizer.step()
             vo_optimizer.zero_grad()
 
+            accel_bias, gyro_bias = optm_bias(
+                args.imu_lr, args.imu_epoch, np.stack(pgo_poses_list), dataset.rgb2imu_sync,
+                dataset.accels, dataset.gyros, integrator.accel_bias, integrator.gyro_bias,
+                dataset.imu_dts, dataset.imu_init, dataset.gravity, device='cuda'
+            )
+            integrator.accel_bias = accel_bias
+            integrator.gyro_bias = gyro_bias
+
             if args.save_model_dir is not None and len(args.save_model_dir) > 0:
                 if not isdir('{}/{}'.format(args.save_model_dir, epoch)):
                     makedirs('{}/{}'.format(args.save_model_dir, epoch))
@@ -424,6 +432,7 @@ if __name__ == '__main__':
                     rot_mask[i] = True
                     trans_mask[i] = True
 
+        # backpropagate VO
         if np.any(rot_mask) or np.any(trans_mask):
             loss_bp = torch.cat((args.rot_w * rot_loss[rot_mask], args.trans_w * trans_loss[trans_mask]))
             # only backpropagate, no optimize
