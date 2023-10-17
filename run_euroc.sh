@@ -29,7 +29,7 @@
 
 conda activate iSLAM
 
-# export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=7
 
 # data_dir=/projects/academic/cwx/euroc/V2_03_difficult/mav0
 # data_dir=/data/euroc/MH_01_easy/mav0
@@ -74,8 +74,6 @@ if [ "$use_scale" = true ]; then
         --project-name ${project_name} \
         --train-name ${train_name} \
         --vo-model-name ./models/stereo_cvt_tartanvo_1914.pkl \
-        --imu-denoise-model-name ./models/imu_denoise_euroc.pkl \
-        --pose-model-name ./models/vonet_euroc.pkl \
         --batch-size ${batch_size} \
         --worker-num 2 \
         --data-root ${data_dir} \
@@ -101,8 +99,6 @@ else
         --project-name ${project_name} \
         --train-name ${train_name} \
         --vo-model-name ./models/stereo_cvt_tartanvo_1914.pkl \
-        --imu-denoise-model-name ./models/imu_denoise_euroc.pkl \
-        --pose-model-name ./models/vonet_euroc.pkl \
         --batch-size ${batch_size} \
         --worker-num 2 \
         --data-root ${data_dir} \

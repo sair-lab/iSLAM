@@ -25,7 +25,7 @@ data_name = [
 
 for dn in data_name:
     dir = data_root + '/' + dn + '/mav0'
-    res_name = dn + '_denoisevo'
+    res_name = dn + '_gtbias'
 
     if machine == 'ccr':
         cmd = "sbatch run_euroc.sh {} {}".format(dir, res_name)
