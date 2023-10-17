@@ -121,6 +121,9 @@ class TartanAirTrajFolderLoader:
             self.imu_dts = np.ones(len(self.rgbfiles), dtype=np.float32) * 0.1
             self.imu_ts = np.array([i for i in range(len(self.rgbfiles))], dtype=np.float64) * 0.1
             self.rgb2imu_sync = np.array([i for i in range(len(self.rgbfiles))])
+            
+            self.accel_bias = np.zeros_like(self.accels)
+            self.gyro_bias = np.zeros_like(self.gyros)
 
             self.rgb2imu_pose = pp.SE3([0, 0, 0,   0, 0, 0, 1]).to(dtype=torch.float32)
 
@@ -140,6 +143,9 @@ class TartanAirTrajFolderLoader:
             self.imu_dts = np.ones(len(self.rgbfiles), dtype=np.float32) * 0.1
             self.imu_ts = np.array([i for i in range(len(self.rgbfiles))], dtype=np.float64) * 0.1
             self.rgb2imu_sync = np.array([i for i in range(len(self.rgbfiles))])
+
+            self.accel_bias = np.zeros_like(self.accels)
+            self.gyro_bias = np.zeros_like(self.gyros)
 
             self.rgb2imu_pose = pp.SE3([0, 0, 0,   0, 0, 0, 1]).to(dtype=torch.float32)
 
@@ -269,10 +275,10 @@ class EuRoCTrajFolderLoader:
             gyros = df.values[:, 1:4].astype(np.float32)
 
             imu2pose_sync = sync_data(timestamps_pose, timestamps_imu)
-            self.accels = accels - accel_bias[imu2pose_sync]
-            self.gyros = gyros - gyro_bias[imu2pose_sync]
-            # self.accels = accels
-            # self.gyros = gyros
+            # self.accels = accels - accel_bias[imu2pose_sync]
+            # self.gyros = gyros - gyro_bias[imu2pose_sync]
+            self.accels = accels
+            self.gyros = gyros
             self.accel_bias = accel_bias[imu2pose_sync]
             self.gyro_bias = gyro_bias[imu2pose_sync]
 
@@ -377,6 +383,9 @@ class KITTITrajFolderLoader:
         self.accels = np.array([[oxts_frame.packet.ax, oxts_frame.packet.ay, oxts_frame.packet.az] for oxts_frame in dataset.oxts])
         self.gyros = np.array([[oxts_frame.packet.wx, oxts_frame.packet.wy, oxts_frame.packet.wz] for oxts_frame in dataset.oxts])
 
+        self.accel_bias = np.zeros_like(self.accels)
+        self.gyro_bias = np.zeros_like(self.gyros)
+
         self.imu_dts = np.diff(ts_imu).astype(np.float32)
         self.imu_ts = np.array(ts_imu).astype(np.float64) - ts_imu[0]
 
@@ -476,6 +485,9 @@ class TrajFolderDatasetBase(Dataset):
             self.rgb2imu_pose = loader.rgb2imu_pose
             self.imu_init = {'rot':self.poses[0, 3:], 'pos':self.poses[0, :3], 'vel':self.vels[0]}
             self.gravity = loader.gravity
+
+            self.accel_bias = loader.accel_bias[start_imu:end_imu]
+            self.gyro_bias = loader.gyro_bias[start_imu:end_imu]
 
             self.imu_motions = None
             self.has_imu = True

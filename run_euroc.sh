@@ -32,8 +32,8 @@ conda activate iSLAM
 export CUDA_VISIBLE_DEVICES=7
 
 # data_dir=/projects/academic/cwx/euroc/V2_03_difficult/mav0
-# data_dir=/data/euroc/MH_01_easy/mav0
-data_dir=$1
+data_dir=/data/euroc/MH_01_easy/mav0
+# data_dir=$1
 
 loss_weight='(4,0.1,2,0.1)'
 rot_w=1
@@ -51,8 +51,8 @@ else
     exp_type='stereo'
 fi
 
-# project_name=test_euroc_denoisevo
-project_name=$2
+project_name=test_euroc_optmbias
+# project_name=$2
 train_name=exp_bs=${batch_size}_lr=${lr}_lw=${loss_weight}_${exp_type}
 
 echo "=============================================="

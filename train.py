@@ -167,6 +167,7 @@ if __name__ == '__main__':
     ############################## init IMU module ######################################################################
     imu_module = IMUModule(
         dataset.accels, dataset.gyros, dataset.imu_dts,
+        dataset.accel_bias[0], dataset.gyro_bias[0],
         dataset.imu_init, dataset.gravity, dataset.rgb2imu_sync, 
         device='cuda', denoise_model_name=args.imu_denoise_model_name,
         denoise_accel=True, denoise_gyro=(dataset.datatype!='kitti')
@@ -232,11 +233,11 @@ if __name__ == '__main__':
 
             accel_bias, gyro_bias = optm_bias(
                 args.imu_lr, args.imu_epoch, np.stack(pgo_poses_list), dataset.rgb2imu_sync,
-                dataset.accels, dataset.gyros, integrator.accel_bias, integrator.gyro_bias,
+                dataset.accels, dataset.gyros, imu_module.accel_bias, imu_module.gyro_bias,
                 dataset.imu_dts, dataset.imu_init, dataset.gravity, device='cuda'
             )
-            integrator.accel_bias = accel_bias
-            integrator.gyro_bias = gyro_bias
+            imu_module.accel_bias = accel_bias
+            imu_module.gyro_bias = gyro_bias
 
             if args.save_model_dir is not None and len(args.save_model_dir) > 0:
                 if not isdir('{}/{}'.format(args.save_model_dir, epoch)):
