@@ -55,9 +55,8 @@ class IMUModule:
         self.integrator = pp.module.IMUPreintegrator(
             init_pos, init_rot, init_vel, gravity=float(gravity)).to(device)
 
-        if self.optm_bias:
-            self.accel_bias = torch.tensor(accel_bias, dtype=dtype).to(device)
-            self.gyro_bias = torch.tensor(gyro_bias, dtype=dtype).to(device)
+        self.accel_bias = torch.tensor(accel_bias, dtype=dtype).to(device)
+        self.gyro_bias = torch.tensor(gyro_bias, dtype=dtype).to(device)
 
         if self.use_denoise_model:
             self.denoiser = IMUCorrector_CNN_GRU()

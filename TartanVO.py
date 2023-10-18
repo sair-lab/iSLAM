@@ -10,19 +10,19 @@ from Network.VONet import VONet
 
 from dense_ba import scale_from_disp_flow
 from Datasets.transformation import tartan2kitti_pypose, cvtSE3_pypose
-from Datasets.utils import save_images, warp_images
 
 np.set_printoptions(precision=4, suppress=True, threshold=10000)
 
 
 class TartanVO(nn.Module):
     def __init__(self, vo_model_name=None, pose_model_name=None, flow_model_name=None, stereo_model_name=None,
-                    device_id=0, correct_scale=True, fix_parts=()):
+                    device_id=0, correct_scale=True, fix_parts=(), use_kitti_coord=True):
         
         super(TartanVO, self).__init__()
         
         self.device_id = device_id
         self.correct_scale = correct_scale
+        self.use_kitti_coord = use_kitti_coord
         # the output scale factor
         self.pose_std = torch.tensor([0.13, 0.13, 0.13, 0.013, 0.013, 0.013]).cuda(self.device_id)
 
@@ -126,6 +126,8 @@ class TartanVO(nn.Module):
                 
                 disp *= 50/4    # scale disparity pridiction to pixel level
 
+                # from Datasets.utils import save_images, warp_images
+
                 # img0_warp = warp_images('temp', img1, flow)
                 # save_images('temp', img0, prefix='', suffix='_orig', fx=1/4, fy=1/4)
                 # save_images('temp', img1, prefix='', suffix='_x', fx=1/4, fy=1/4)
@@ -188,7 +190,10 @@ class TartanVO(nn.Module):
                 trans = torch.nn.functional.normalize(pose[:, :3], dim=1) * scale.view(-1, 1)
                 pose = torch.cat([trans, pose[:, 3:]], dim=1)
 
-            pose = tartan2kitti_pypose(pose)
+            if self.use_kitti_coord:
+                pose = tartan2kitti_pypose(pose)
+            else:
+                pose = cvtSE3_pypose(pose)
             res['motion'] = pose
 
             return res

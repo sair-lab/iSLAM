@@ -112,91 +112,28 @@ class TartanAirTrajFolderLoader:
         ############################## load gt poses ######################################################################
         posefile = datadir + '/pose_left.txt'
         self.poses = np.loadtxt(posefile).astype(np.float32)
-        self.poses = tartan2kitti_pypose(self.poses).numpy()
         self.vels = None
 
         ############################## load imu data ######################################################################
         if isdir(datadir + '/imu'):
-        # if False:
-            self.imu_dts = np.ones(len(self.rgbfiles), dtype=np.float32) * 0.1
-            self.imu_ts = np.array([i for i in range(len(self.rgbfiles))], dtype=np.float64) * 0.1
-            self.rgb2imu_sync = np.array([i for i in range(len(self.rgbfiles))])
-
+            self.imu_dts = np.ones(len(self.rgbfiles)*10, dtype=np.float32) * 0.01
+            self.imu_ts = np.array([i for i in range(len(self.rgbfiles)*10)], dtype=np.float64) * 0.01
+            self.rgb2imu_sync = np.array([i for i in range(len(self.rgbfiles))]) * 10
             self.rgb2imu_pose = pp.SE3([0, 0, 0,   0, 0, 0, 1]).to(dtype=torch.float32)
-
             self.gravity = 0
 
             imudir = datadir + '/imu'
             # acceleration in the body frame
-            self.accels = np.load(imudir + '/accel_left.npy')
+            self.accels = np.load(imudir + '/acc_nograv_body.npy')
             # angular rate in the body frame
-            self.gyros = np.load(imudir + '/gyro_left.npy')
+            self.gyros = np.load(imudir + '/gyro.npy')
             # velocity in the world frame
-            self.vels = np.load(imudir + '/vel_left.npy')
+            self.vels = np.load(imudir + '/vel_global.npy')
 
-            self.accel_bias = np.zeros_like(self.accels)
-            self.gyro_bias = np.zeros_like(self.gyros)
-
-            self.has_imu = True
-
-        else:
-            self.imu_dts = np.ones(len(self.rgbfiles), dtype=np.float32) * 0.1
-            self.imu_ts = np.array([i for i in range(len(self.rgbfiles))], dtype=np.float64) * 0.1
-            self.rgb2imu_sync = np.array([i for i in range(len(self.rgbfiles))])
-
-            self.rgb2imu_pose = pp.SE3([0, 0, 0,   0, 0, 0, 1]).to(dtype=torch.float32)
-
-            self.gravity = 0
-
-            dt = 0.1
-
-            # genarate world vel
-            self.vels = np.diff(self.poses[:, :3], axis=0) / dt
-            self.vels = np.concatenate([self.vels, self.vels[-1].reshape(1, -1)], axis=0)
-
-            # generate accel
-            accels_world = np.diff(self.vels, axis=0) / dt
-            accels_world = np.concatenate([accels_world, accels_world[-1].reshape(1, -1)], axis=0)
-            self.accels = (pp.SE3(self.poses).rotation().Inv() @ torch.tensor(accels_world)).numpy()
-
-            # generate gyro
-            motions = pose2motion_pypose(self.poses)
-            self.gyros = motions.rotation().euler().numpy() / dt
-
-            self.accel_bias = np.zeros_like(self.accels)
-            self.gyro_bias = np.zeros_like(self.gyros)
-
-            # add accel noise
-            accel_sigma = np.mean(np.abs(self.accels), axis=0) * 1e-2
-            # print('accel_sigma', accel_sigma)
-            accels_noise = np.stack([
-                np.random.normal(0, accel_sigma[0], self.accels.shape[0]),
-                np.random.normal(0, accel_sigma[1], self.accels.shape[0]),
-                np.random.normal(0, accel_sigma[2], self.accels.shape[0])
-            ]).T
-            # print('accels_noise', accels_noise[:10])
-            # accels_noise = np.cumsum(accels_noise, axis=0)
-            self.accels += accels_noise
-
-            # add gyro noise
-            gyro_sigma = np.mean(np.abs(self.gyros), axis=0) * 1e-2
-            # print('gyro_sigma', gyro_sigma)
-            gyros_noise = np.stack([
-                np.random.normal(0, gyro_sigma[0], self.gyros.shape[0]),
-                np.random.normal(0, gyro_sigma[1], self.gyros.shape[0]),
-                np.random.normal(0, gyro_sigma[2], self.gyros.shape[0])
-            ]).T
-            # print('gyros_noise', gyros_noise[:10])
-            # gyros_noise = np.cumsum(gyros_noise, axis=0)
-            self.gyros += gyros_noise
-
-            # save results
-            imudir = datadir + '/imu'
-            if not isdir(imudir):
-                makedirs(imudir)
-            np.save(imudir + '/accel_left.npy', self.accels)
-            np.save(imudir + '/gyro_left.npy', self.gyros)
-            np.save(imudir + '/vel_left.npy', self.vels)
+            with open(imudir + '/parameter.yaml', 'r') as file:
+                paras = yaml.safe_load(file)
+            self.accel_bias = np.array(paras['acc_zero_bias'])
+            self.gyro_bias = np.array(paras['gyro_zero_bias'])
 
             self.has_imu = True
 
@@ -281,8 +218,8 @@ class EuRoCTrajFolderLoader:
             # self.gyros = gyros - gyro_bias[imu2pose_sync]
             self.accels = accels
             self.gyros = gyros
-            self.accel_bias = accel_bias[imu2pose_sync]
-            self.gyro_bias = gyro_bias[imu2pose_sync]
+            self.accel_bias = np.mean(accel_bias[imu2pose_sync], axis=0)
+            self.gyro_bias = np.mean(gyro_bias[imu2pose_sync], axis=0)
 
             self.imu_dts = np.diff(timestamps_imu).astype(np.float32) * 1e-3
             self.imu_ts = np.array(timestamps_imu).astype(np.float64) * 1e-3
@@ -383,8 +320,8 @@ class KITTITrajFolderLoader:
         self.accels = np.array([[oxts_frame.packet.ax, oxts_frame.packet.ay, oxts_frame.packet.az] for oxts_frame in dataset.oxts]).astype(np.float32)
         self.gyros = np.array([[oxts_frame.packet.wx, oxts_frame.packet.wy, oxts_frame.packet.wz] for oxts_frame in dataset.oxts]).astype(np.float32)
 
-        self.accel_bias = np.zeros_like(self.accels)
-        self.gyro_bias = np.zeros_like(self.gyros)
+        self.accel_bias = np.zeros(3)
+        self.gyro_bias = np.zeros(3)
 
         self.imu_dts = np.diff(ts_imu).astype(np.float32)
         self.imu_ts = np.array(ts_imu).astype(np.float64) - ts_imu[0]

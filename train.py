@@ -1,5 +1,5 @@
-from Datasets.transformation import tartan2kitti_pypose, motion2pose_pypose, pose2motion_pypose, cvtSE3_pypose
 from Datasets.utils import ToTensor, Compose, CropCenter, DownscaleFlow, Normalize, SqueezeBatchDim
+from Datasets.transformation import motion2pose_pypose, pose2motion_pypose, cvtSE3_pypose
 from dense_ba import DenseReprojectionLoss, SparseReprojectionLoss, FAST_point_detector
 from Datasets.utils import kitti_raw2odometry, euroc_raw2short
 from Datasets.TrajFolderDataset import TrajFolderDataset
@@ -88,10 +88,9 @@ def snapshot(final=False):
             np.savetxt('{}/{}/loop_edge.txt'.format(trainroot, epoch), loop_edges.numpy(), fmt='%d')
             np.savetxt('{}/{}/loop_motion.txt'.format(trainroot, epoch), loop_motions.numpy())
 
-        if imu_module.optm_bias:
-            accel_bias = imu_module.accel_bias.detach().cpu().numpy()
-            gyro_bias = imu_module.gyro_bias.detach().cpu().numpy()
-            np.savetxt('{}/{}/imu_bias.txt'.format(trainroot, epoch), np.concatenate([accel_bias, gyro_bias]))
+        accel_bias = imu_module.accel_bias.detach().cpu().numpy()
+        gyro_bias = imu_module.gyro_bias.detach().cpu().numpy()
+        np.savetxt('{}/{}/imu_bias.txt'.format(trainroot, epoch), np.concatenate([accel_bias, gyro_bias]))
 
 
 def reverse_sample(sample, left_right=False):
@@ -154,13 +153,13 @@ if __name__ == '__main__':
     if args.start_epoch == 1:
         tartanvo = TartanVO(
             vo_model_name=args.vo_model_name, pose_model_name=args.pose_model_name,
-            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts
+            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts, use_kitti_coord=(dataset.datatype!='tartanair')
         )
     else:
         last_pose_model_name = '{}/{}/vonet.pkl'.format(args.save_model_dir, args.start_epoch - 1)
         tartanvo = TartanVO(
             vo_model_name=args.vo_model_name, pose_model_name=last_pose_model_name, 
-            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts
+            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts, use_kitti_coord=(dataset.datatype!='tartanair')
         )
     if args.vo_optimizer == 'adam':
         vo_optimizer = optim.Adam(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
@@ -172,10 +171,11 @@ if __name__ == '__main__':
     ############################## init IMU module ######################################################################
     imu_module = IMUModule(
         dataset.accels, dataset.gyros, dataset.imu_dts,
-        dataset.accel_bias[0], dataset.gyro_bias[0],
+        dataset.accel_bias, dataset.gyro_bias,
         dataset.imu_init, dataset.gravity, dataset.rgb2imu_sync, 
         device='cuda', denoise_model_name=args.imu_denoise_model_name,
         denoise_accel=True, denoise_gyro=(dataset.datatype!='kitti')
+        # denoise_accel=False, denoise_gyro=False
     )
 
     ############################## init loop closure ######################################################################
