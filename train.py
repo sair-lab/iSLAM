@@ -88,9 +88,10 @@ def snapshot(final=False):
             np.savetxt('{}/{}/loop_edge.txt'.format(trainroot, epoch), loop_edges.numpy(), fmt='%d')
             np.savetxt('{}/{}/loop_motion.txt'.format(trainroot, epoch), loop_motions.numpy())
 
-        accel_bias = imu_module.accel_bias.detach().cpu().numpy()
-        gyro_bias = imu_module.gyro_bias.detach().cpu().numpy()
-        np.savetxt('{}/{}/imu_bias.txt'.format(trainroot, epoch), np.concatenate([accel_bias, gyro_bias]))
+        if imu_module.optm_bias:
+            accel_bias = imu_module.accel_bias.detach().cpu().numpy()
+            gyro_bias = imu_module.gyro_bias.detach().cpu().numpy()
+            np.savetxt('{}/{}/imu_bias.txt'.format(trainroot, epoch), np.concatenate([accel_bias, gyro_bias]))
 
 
 def reverse_sample(sample, left_right=False):
@@ -235,14 +236,15 @@ if __name__ == '__main__':
             # optimize after each epoch (go through the whole trajectory)
             vo_optimizer.step()
             vo_optimizer.zero_grad()
-
-            accel_bias, gyro_bias = optm_bias(
-                args.imu_lr, args.imu_epoch, np.stack(pgo_poses_list), dataset.rgb2imu_sync[:len(pgo_poses_list)],
-                dataset.accels, dataset.gyros, imu_module.accel_bias, imu_module.gyro_bias,
-                dataset.imu_dts, dataset.imu_init, dataset.gravity, device='cuda'
-            )
-            imu_module.accel_bias = accel_bias
-            imu_module.gyro_bias = gyro_bias
+            
+            if imu_module.optm_bias:
+                accel_bias, gyro_bias = optm_bias(
+                    args.imu_lr, args.imu_epoch, np.stack(pgo_poses_list), dataset.rgb2imu_sync[:len(pgo_poses_list)],
+                    dataset.accels, dataset.gyros, imu_module.accel_bias, imu_module.gyro_bias,
+                    dataset.imu_dts, dataset.imu_init, dataset.gravity, device='cuda'
+                )
+                imu_module.accel_bias = accel_bias
+                imu_module.gyro_bias = gyro_bias
 
             if args.save_model_dir is not None and len(args.save_model_dir) > 0:
                 if not isdir('{}/{}'.format(args.save_model_dir, epoch)):

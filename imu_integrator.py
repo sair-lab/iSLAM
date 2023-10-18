@@ -104,18 +104,20 @@ class IMUModule:
             if self.denoise_gyro:
                 gyros -= self.gyro_bias.view(1, 3)
 
-        if self.use_denoise_model and imu_batch_end - imu_batch_st >= 10:
-            data = {'acc':accels, 'gyro':gyros}
-            denoised_accels, denoised_gyros, acc_cov, gyro_cov = self.denoiser(data, eval=True)
-            if self.denoise_accel:
-                accels = denoised_accels
-            if self.denoise_gyro:
-                gyros = denoised_gyros
+        # if self.use_denoise_model and imu_batch_end - imu_batch_st >= 10:
+        #     data = {'acc':accels, 'gyro':gyros}
+        #     denoised_accels, denoised_gyros, acc_cov, gyro_cov = self.denoiser(data, eval=True)
+        #     if self.denoise_accel:
+        #         accels = denoised_accels
+        #     if self.denoise_gyro:
+        #         gyros = denoised_gyros
 
         # has_imu = torch.ones(end-st, dtype=bool)
         for i in range(st, end):
             imu_frame_st = self.rgb2imu_sync[i] - imu_batch_st
             imu_frame_end = self.rgb2imu_sync[i+1] - imu_batch_st
+            
+            
             
             # if imu_frame_st == imu_frame_end:
             #     has_imu[i-st] = False
@@ -142,7 +144,20 @@ class IMUModule:
                 dt = dts[imu_frame_st:imu_frame_end]
                 gyro = gyros[imu_frame_st:imu_frame_end]
                 acc = accels[imu_frame_st:imu_frame_end]
-                state = self.integrator(dt=dt, gyro=gyro, acc=acc, init_state=last_state)
+                
+                if self.use_denoise_model and imu_frame_end - imu_frame_st >= 10:
+                    data = {'acc':acc, 'gyro':gyro}
+                    denoised_accels, denoised_gyros, acc_cov, gyro_cov = self.denoiser(data, eval=True)
+                    if self.denoise_accel:
+                        acc = denoised_accels
+                    if self.denoise_gyro:
+                        gyro = denoised_gyros
+                
+                    # print(acc.shape, current_acc_cov.shape)
+                    state = self.integrator(dt=dt, gyro=gyro, acc=acc, gyro_cov=gyro_cov, acc_cov=acc_cov, init_state=last_state)
+                    # state = self.integrator(dt=dt, gyro=gyro, acc=acc, init_state=last_state)
+                else:
+                    state = self.integrator(dt=dt, gyro=gyro, acc=acc, init_state=last_state)
 
             poses.append(state['pos'][..., -1, :].squeeze().cpu())
             vels.append(state['vel'][..., -1, :].squeeze().cpu())
