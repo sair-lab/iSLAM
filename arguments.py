@@ -61,10 +61,10 @@ def get_args():
                         help='use right camera vo in pvgo (default: False)')
     parser.add_argument('--reproj-points', type=int, default=0,
                         help='number of points used in reproection error (default: 0)')
-    parser.add_argument('--imu-lr', type=float, default=1e-6,
-                        help='imu bias learning rate (default: "1e-6")')
-    parser.add_argument('--imu-epoch', type=float, default=5,
-                        help='epoch of imu bias optm (default: "5")')
+    parser.add_argument('--imu-lr', type=float, default=1e-5,
+                        help='imu bias learning rate (default: "1e-5")')
+    parser.add_argument('--imu-epoch', type=int, default=50,
+                        help='epoch of imu bias optm (default: "50")')
 
     args = parser.parse_args()
     args.loss_weight = eval(args.loss_weight)   # string to tuple

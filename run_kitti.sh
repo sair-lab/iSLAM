@@ -33,8 +33,8 @@ conda activate iSLAM
 
 # data_dir=/projects/academic/cwx/kitti_raw/2011_10_03/2011_10_03_drive_0027_sync
 # data_dir=/home/data2/kitti_raw/2011_10_03/2011_10_03_drive_0042_sync
-# data_dir=/data/kitti/2011_09_30/2011_09_30_drive_0018_sync
-data_dir=$1
+data_dir=/data/kitti/2011_09_30/2011_09_30_drive_0018_sync
+# data_dir=$1
 
 loss_weight='(1,0.1,10,0.1)'
 rot_w=1
@@ -52,8 +52,8 @@ else
     exp_type='stereo'
 fi
 
-# project_name=test_kitti_denoisevo
-project_name=$2
+project_name=test_kitti_optmbias
+# project_name=$2
 train_name=exp_bs=${batch_size}_lr=${lr}_lw=${loss_weight}_${exp_type}
 
 echo "=============================================="
@@ -75,8 +75,6 @@ if [ "$use_scale" = true ]; then
         --project-name ${project_name} \
         --train-name ${train_name} \
         --vo-model-name ./models/stereo_cvt_tartanvo_1914.pkl \
-        --imu-denoise-model-name ./models/imu_denoise_kitti.pkl \
-        --pose-model-name ./models/vonet_kitti.pkl \
         --batch-size ${batch_size} \
         --worker-num 2 \
         --data-root ${data_dir} \
@@ -93,6 +91,8 @@ if [ "$use_scale" = true ]; then
         --trans-w ${trans_w} \
         --train-portion ${train_portion} \
         --reproj-points ${reproj_points} \
+        --imu-lr 1e-5 \
+        --imu-epoch 50 \
         --use-gt-scale
 else
     # stereo: calc scale
@@ -102,8 +102,6 @@ else
         --project-name ${project_name} \
         --train-name ${train_name} \
         --vo-model-name ./models/stereo_cvt_tartanvo_1914.pkl \
-        --imu-denoise-model-name ./models/imu_denoise_kitti.pkl \
-        --pose-model-name ./models/vonet_kitti.pkl \
         --batch-size ${batch_size} \
         --worker-num 2 \
         --data-root ${data_dir} \
@@ -119,5 +117,7 @@ else
         --rot-w ${rot_w} \
         --trans-w ${trans_w} \
         --train-portion ${train_portion} \
-        --reproj-points ${reproj_points}
+        --reproj-points ${reproj_points} \
+        --imu-lr 1e-5 \
+        --imu-epoch 50
 fi

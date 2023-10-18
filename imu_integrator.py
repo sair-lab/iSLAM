@@ -46,6 +46,8 @@ class IMUModule:
         self.gyros = torch.tensor(gyros, dtype=dtype).to(device)
         self.dts = torch.tensor(dts, dtype=dtype).unsqueeze(-1).to(device)
 
+        self.denoise_accel = denoise_accel
+        self.denoise_gyro = denoise_gyro
         self.use_denoise_model = denoise_model_name is not None and denoise_model_name != '' and (denoise_accel or denoise_gyro)
         self.optm_bias = not self.use_denoise_model and (denoise_accel or denoise_gyro)
 
@@ -54,17 +56,14 @@ class IMUModule:
             init_pos, init_rot, init_vel, gravity=float(gravity)).to(device)
 
         if self.optm_bias:
-            self.accel_bias = accel_bias.to(dtype).to(device)
-            self.gyro_bias = gyro_bias.to(dtype).to(device)
+            self.accel_bias = torch.tensor(accel_bias, dtype=dtype).to(device)
+            self.gyro_bias = torch.tensor(gyro_bias, dtype=dtype).to(device)
 
         if self.use_denoise_model:
             self.denoiser = IMUCorrector_CNN_GRU()
             pretrain = torch.load(denoise_model_name)
             self.denoiser.load_state_dict(pretrain)
             self.denoiser = self.denoiser.to(device)
-
-            self.denoise_accel = denoise_accel
-            self.denoise_gyro = denoise_gyro
 
 
     def integrate(self, st, end, init=None, motion_mode=False):
@@ -103,7 +102,7 @@ class IMUModule:
             if self.denoise_accel:
                 accels -= self.accel_bias.view(1, 3)
             if self.denoise_gyro:
-                gyros -= self.gyros_bias.view(1, 3)
+                gyros -= self.gyro_bias.view(1, 3)
 
         if self.use_denoise_model and imu_batch_end - imu_batch_st >= 10:
             data = {'acc':accels, 'gyro':gyros}
@@ -197,9 +196,13 @@ class IMUFwd(nn.Module):
                 
 
 def optm_bias(lr, epoch, poses, sync, accels, gyros, accel_bias, gyro_bias, dts, init, gravity, device='cuda:0'):
+    poses = pp.SE3(poses).to(device)
+
     imu = IMUFwd(accels, gyros, accel_bias, gyro_bias, dts, init, gravity, device).to(device)
     optimizer = torch.optim.Adam(imu.parameters(), lr=lr)
     scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.2, patience=2)
+
+    loss1 = imu(poses, sync)
 
     for epoch_i in range(epoch):
         optimizer.zero_grad()
@@ -208,7 +211,10 @@ def optm_bias(lr, epoch, poses, sync, accels, gyros, accel_bias, gyro_bias, dts,
         optimizer.step()
         scheduler.step(loss)
 
-        print('IMU loss:', loss.item(), '\tlr=', scheduler._last_lr)
+        # print('IMU loss:', loss.item(), '\tlr=', scheduler._last_lr)
+
+    loss2 = imu(poses, sync)
+    print(f'IMU loss: {loss1.item()} -> {loss2.item()}')
 
     return imu.accel_bias.detach(), imu.gyro_bias.detach()
 
@@ -217,8 +223,9 @@ if __name__ == '__main__':
     from Datasets.utils import ToTensor, Compose, CropCenter, DownscaleFlow, Normalize, SqueezeBatchDim
     from Datasets.TrajFolderDataset import TrajFolderDataset
 
-    data_root = '/data/euroc/MH_01_easy/mav0'
-    data_type = 'euroc'
+    # data_root = '/data/euroc/MH_01_easy/mav0'
+    data_root = '/data/kitti/2011_09_30/2011_09_30_drive_0018_sync'
+    data_type = 'kitti'
     start_frame = 0
     end_frame = -1
 
@@ -246,7 +253,7 @@ if __name__ == '__main__':
     print(gyro_bias)
 
     accel_bias, gyro_bias = optm_bias(
-        1e-5, 100, poses, dataset.rgb2imu_sync, dataset.accels, dataset.gyros,
+        1e-5, 50, poses, dataset.rgb2imu_sync, dataset.accels, dataset.gyros,
         accel_bias, gyro_bias, dataset.imu_dts, dataset.imu_init, dataset.gravity
     )
 

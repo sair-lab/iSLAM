@@ -121,9 +121,6 @@ class TartanAirTrajFolderLoader:
             self.imu_dts = np.ones(len(self.rgbfiles), dtype=np.float32) * 0.1
             self.imu_ts = np.array([i for i in range(len(self.rgbfiles))], dtype=np.float64) * 0.1
             self.rgb2imu_sync = np.array([i for i in range(len(self.rgbfiles))])
-            
-            self.accel_bias = np.zeros_like(self.accels)
-            self.gyro_bias = np.zeros_like(self.gyros)
 
             self.rgb2imu_pose = pp.SE3([0, 0, 0,   0, 0, 0, 1]).to(dtype=torch.float32)
 
@@ -137,6 +134,9 @@ class TartanAirTrajFolderLoader:
             # velocity in the world frame
             self.vels = np.load(imudir + '/vel_left.npy')
 
+            self.accel_bias = np.zeros_like(self.accels)
+            self.gyro_bias = np.zeros_like(self.gyros)
+
             self.has_imu = True
 
         else:
@@ -144,12 +144,11 @@ class TartanAirTrajFolderLoader:
             self.imu_ts = np.array([i for i in range(len(self.rgbfiles))], dtype=np.float64) * 0.1
             self.rgb2imu_sync = np.array([i for i in range(len(self.rgbfiles))])
 
-            self.accel_bias = np.zeros_like(self.accels)
-            self.gyro_bias = np.zeros_like(self.gyros)
-
             self.rgb2imu_pose = pp.SE3([0, 0, 0,   0, 0, 0, 1]).to(dtype=torch.float32)
 
             self.gravity = 0
+
+            dt = 0.1
 
             # genarate world vel
             self.vels = np.diff(self.poses[:, :3], axis=0) / dt
@@ -163,6 +162,9 @@ class TartanAirTrajFolderLoader:
             # generate gyro
             motions = pose2motion_pypose(self.poses)
             self.gyros = motions.rotation().euler().numpy() / dt
+
+            self.accel_bias = np.zeros_like(self.accels)
+            self.gyro_bias = np.zeros_like(self.gyros)
 
             # add accel noise
             accel_sigma = np.mean(np.abs(self.accels), axis=0) * 1e-2
@@ -378,10 +380,8 @@ class KITTITrajFolderLoader:
         self.vels = self.vels.numpy()
 
         ############################## load imu data ######################################################################
-        # self.accels = np.array([[oxts_frame.packet.af, oxts_frame.packet.al, oxts_frame.packet.au] for oxts_frame in dataset.oxts])
-        # self.gyros = np.array([[oxts_frame.packet.wf, oxts_frame.packet.wl, oxts_frame.packet.wu] for oxts_frame in dataset.oxts])
-        self.accels = np.array([[oxts_frame.packet.ax, oxts_frame.packet.ay, oxts_frame.packet.az] for oxts_frame in dataset.oxts])
-        self.gyros = np.array([[oxts_frame.packet.wx, oxts_frame.packet.wy, oxts_frame.packet.wz] for oxts_frame in dataset.oxts])
+        self.accels = np.array([[oxts_frame.packet.ax, oxts_frame.packet.ay, oxts_frame.packet.az] for oxts_frame in dataset.oxts]).astype(np.float32)
+        self.gyros = np.array([[oxts_frame.packet.wx, oxts_frame.packet.wy, oxts_frame.packet.wz] for oxts_frame in dataset.oxts]).astype(np.float32)
 
         self.accel_bias = np.zeros_like(self.accels)
         self.gyro_bias = np.zeros_like(self.gyros)

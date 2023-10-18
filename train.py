@@ -88,6 +88,10 @@ def snapshot(final=False):
             np.savetxt('{}/{}/loop_edge.txt'.format(trainroot, epoch), loop_edges.numpy(), fmt='%d')
             np.savetxt('{}/{}/loop_motion.txt'.format(trainroot, epoch), loop_motions.numpy())
 
+        accel_bias = imu_module.accel_bias.detach().cpu().numpy()
+        gyro_bias = imu_module.gyro_bias.detach().cpu().numpy()
+        np.savetxt('{}/{}/imu_bias.txt'.format(trainroot, epoch), np.concatenate([accel_bias, gyro_bias]))
+
 
 def reverse_sample(sample, left_right=False):
     res = sample.copy()
@@ -183,10 +187,11 @@ if __name__ == '__main__':
         idx = euroc_raw2short(dataset.datadir)
         loop_edges_file = f'./{folder}/result_euroc-{idx}/loop_ransac.txt'
         loop_motions_file = f'./{folder}/result_euroc-{idx}/loop_ransac_motion.txt'
-    if isfile(loop_edges_file):
-        loop_closure = LoopClosure(dataset, args.batch_size, loop_edges_file, loop_motions_file)
-    else:
-        loop_closure = None
+    # if isfile(loop_edges_file):
+    #     loop_closure = LoopClosure(dataset, args.batch_size, loop_edges_file, loop_motions_file)
+    # else:
+    #     loop_closure = None
+    loop_closure = None
 
     # for debug, output edge figures
     if loop_closure is not None:
@@ -232,7 +237,7 @@ if __name__ == '__main__':
             vo_optimizer.zero_grad()
 
             accel_bias, gyro_bias = optm_bias(
-                args.imu_lr, args.imu_epoch, np.stack(pgo_poses_list), dataset.rgb2imu_sync,
+                args.imu_lr, args.imu_epoch, np.stack(pgo_poses_list), dataset.rgb2imu_sync[:len(pgo_poses_list)],
                 dataset.accels, dataset.gyros, imu_module.accel_bias, imu_module.gyro_bias,
                 dataset.imu_dts, dataset.imu_init, dataset.gravity, device='cuda'
             )
