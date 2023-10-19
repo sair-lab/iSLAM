@@ -31,7 +31,7 @@ def prase_init(init=None, motion_mode=False, device='cuda:0'):
 class IMUModule:
     def __init__(self, accels, gyros, dts, accel_bias=torch.zeros(3), gyro_bias=torch.zeros(3),
                  init=None, gravity=9.81007, rgb2imu_sync=None, device='cuda:0', 
-                 denoise_model_name=None, denoise_accel=True, denoise_gyro=True):
+                 denoise_model_name=None, denoise_accel=True, denoise_gyro=True, use_est_cov=False):
         
         self.device = device
         self.last_frame_dt = 0.1
@@ -63,6 +63,7 @@ class IMUModule:
             pretrain = torch.load(denoise_model_name)
             self.denoiser.load_state_dict(pretrain)
             self.denoiser = self.denoiser.to(device)
+            self.use_est_cov = use_est_cov
 
 
     def integrate(self, st, end, init=None, motion_mode=False):
@@ -151,10 +152,10 @@ class IMUModule:
                         acc = denoised_accels
                     if self.denoise_gyro:
                         gyro = denoised_gyros
-                
-                    # print(acc.shape, current_acc_cov.shape)
-                    state = self.integrator(dt=dt, gyro=gyro, acc=acc, gyro_cov=gyro_cov, acc_cov=acc_cov, init_state=last_state)
-                    # state = self.integrator(dt=dt, gyro=gyro, acc=acc, init_state=last_state)
+                    if self.use_est_cov:
+                        state = self.integrator(dt=dt, gyro=gyro, acc=acc, gyro_cov=gyro_cov, acc_cov=acc_cov, init_state=last_state)
+                    else:
+                        state = self.integrator(dt=dt, gyro=gyro, acc=acc, init_state=last_state)
                 else:
                     state = self.integrator(dt=dt, gyro=gyro, acc=acc, init_state=last_state)
 

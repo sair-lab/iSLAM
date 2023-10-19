@@ -174,7 +174,8 @@ if __name__ == '__main__':
         dataset.accel_bias, dataset.gyro_bias,
         dataset.imu_init, dataset.gravity, dataset.rgb2imu_sync, 
         device='cuda', denoise_model_name=args.imu_denoise_model_name,
-        denoise_accel=True, denoise_gyro=(dataset.datatype!='kitti')
+        denoise_accel=True, denoise_gyro=(dataset.datatype!='kitti'),
+        use_est_cov=args.use_est_cov,
         # denoise_accel=False, denoise_gyro=False
     )
 
