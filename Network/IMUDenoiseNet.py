@@ -8,7 +8,7 @@ import pypose as pp
 
 class IMUCorrector_CNN_GRU_WO_COV(nn.Module):
     def __init__(self, in_channel=6, out_channel=64, hidden_size=128, kernel_size=10, num_layers=1):
-        super(IMUCorrector_CNN_GRU, self).__init__()
+        super(IMUCorrector_CNN_GRU_WO_COV, self).__init__()
 
         self.hidden_size = hidden_size
         self.num_layers = num_layers
