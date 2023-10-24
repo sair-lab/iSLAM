@@ -117,8 +117,6 @@ class IMUModule:
             imu_frame_st = self.rgb2imu_sync[i] - imu_batch_st
             imu_frame_end = self.rgb2imu_sync[i+1] - imu_batch_st
             
-            
-            
             # if imu_frame_st == imu_frame_end:
             #     has_imu[i-st] = False
             #     dtype = accels.dtype
@@ -140,6 +138,7 @@ class IMUModule:
                     state['vel'] = torch.zeros((1, 3), dtype=dtype).to(self.device)
                 else:
                     state['vel'] = torch.zeros((1, 3), dtype=dtype).to(self.device)
+            
             else:
                 dt = dts[imu_frame_st:imu_frame_end]
                 gyro = gyros[imu_frame_st:imu_frame_end]
@@ -152,10 +151,12 @@ class IMUModule:
                         acc = denoised_accels
                     if self.denoise_gyro:
                         gyro = denoised_gyros
+
                     if self.use_est_cov:
                         state = self.integrator(dt=dt, gyro=gyro, acc=acc, gyro_cov=gyro_cov, acc_cov=acc_cov, init_state=last_state)
                     else:
                         state = self.integrator(dt=dt, gyro=gyro, acc=acc, init_state=last_state)
+                
                 else:
                     state = self.integrator(dt=dt, gyro=gyro, acc=acc, init_state=last_state)
 

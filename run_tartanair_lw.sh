@@ -27,18 +27,21 @@
 ###SBATCH --requeue
 
 
+# conda activate iSLAM
+
 # export CUDA_VISIBLE_DEVICES=1
 
 # data_dir=/user/taimengf/projects/cwx/tartanair/TartanAir/ocean/Hard/P001
-# data_dir=/data/tartanair/ocean/Hard/P000
+# data_dir=/data/tartanair/ocean/Hard/P001
 data_dir=$1
 
-loss_weight='(1.5,0.125,1.6875,0.025)'
+# loss_weight='(4,4,2,0.1)'
+loss_weight=$3
 rot_w=1
 trans_w=0.1
 batch_size=8
 lr=1e-6
-epoch=17
+epoch=1
 start_epoch=1
 train_portion=1
 
@@ -49,9 +52,9 @@ else
     exp_type='stereo'
 fi
 
-# project_name=test_tartanair
+# project_name=ocean_Hard_P001_optmbias
 project_name=$2
-train_name=exp_bs=${batch_size}_lr=${lr}_lw=${loss_weight}_${exp_type}
+train_name=tune_lw=${loss_weight}_${exp_type}
 
 echo "=============================================="
 echo "project name = ${project_name}"
@@ -59,10 +62,10 @@ echo "train name = ${train_name}"
 echo "data dir = ${data_dir}"
 echo "=============================================="
 
-if [ "$start_epoch" = 1 ]; then
-    rm -r train_results/${project_name}/${train_name}
-    rm -r train_results_models/${project_name}/${train_name}
-fi
+# if [ "$start_epoch" = 1 ]; then
+#     rm -r train_results/${project_name}/${train_name}
+#     rm -r train_results_models/${project_name}/${train_name}
+# fi
 mkdir -p train_results/${project_name}/${train_name}
 mkdir -p train_results_models/${project_name}/${train_name}
 
@@ -93,7 +96,7 @@ if [ "$use_scale" = true ]; then
         --use-gt-scale
 else
     # stereo: calc scale
-    python train.py \
+    python tune_lw.py \
         --result-dir train_results/${project_name}/${train_name} \
         --save-model-dir train_results_models/${project_name}/${train_name} \
         --project-name ${project_name} \
