@@ -150,17 +150,17 @@ if __name__ == '__main__':
     print('Load dataset time:', timer.tot('dataset'))
 
     ############################## init VO model ######################################################################
-    if args.start_epoch == 1:
-        tartanvo = TartanVO(
-            vo_model_name=args.vo_model_name, pose_model_name=args.pose_model_name,
-            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts, use_kitti_coord=(dataset.datatype!='tartanair')
-        )
-    else:
-        last_pose_model_name = '{}/{}/vonet.pkl'.format(args.save_model_dir, args.start_epoch - 1)
-        tartanvo = TartanVO(
-            vo_model_name=args.vo_model_name, pose_model_name=last_pose_model_name, 
-            correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts, use_kitti_coord=(dataset.datatype!='tartanair')
-        )
+    pose_model_name = args.pose_model_name
+    if args.start_epoch > 1:
+        for i in range(args.start_epoch-1, 0, -1):
+            last_model_name = '{}/{}/vonet.pkl'.format(args.save_model_dir, i)
+            if isfile(last_model_name):
+                pose_model_name = last_model_name
+                break
+    tartanvo = TartanVO(
+        vo_model_name=args.vo_model_name, pose_model_name=pose_model_name, 
+        correct_scale=args.use_gt_scale, fix_parts=args.fix_model_parts, use_kitti_coord=(dataset.datatype!='tartanair')
+    )
     if args.vo_optimizer == 'adam':
         vo_optimizer = optim.Adam(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
     elif args.vo_optimizer == 'rmsprop':
@@ -169,15 +169,25 @@ if __name__ == '__main__':
         vo_optimizer = optim.SGD(tartanvo.vonet.flowPoseNet.parameters(), lr=args.lr)
 
     ############################## init IMU module ######################################################################
+    imu_denoise_model_name = args.imu_denoise_model_name
+    if args.start_epoch > 1:
+        for i in range(args.start_epoch-1, 0, -1):
+            last_model_name = '{}/{}/imudenoise.pkl'.format(args.save_model_dir, i)
+            if isfile(last_model_name):
+                imu_denoise_model_name = last_model_name
+                break
     imu_module = IMUModule(
         dataset.accels, dataset.gyros, dataset.imu_dts,
         dataset.accel_bias, dataset.gyro_bias,
         dataset.imu_init, dataset.gravity, dataset.rgb2imu_sync, 
-        device='cuda', denoise_model_name=args.imu_denoise_model_name,
+        device='cuda', denoise_model_name=imu_denoise_model_name,
         denoise_accel=True, denoise_gyro=(dataset.datatype!='kitti'),
         use_est_cov=args.use_est_cov,
         # denoise_accel=False, denoise_gyro=False
     )
+
+    if imu_module.use_denoise_model:
+        imu_optimizer = optim.Adam(imu_module.denoiser.parameters(), lr=3e-5)
 
     ############################## init loop closure ######################################################################
     folder = 'loop_edges1-5'
@@ -213,11 +223,16 @@ if __name__ == '__main__':
     np.savetxt(trainroot+'/timestamp.txt', dataset.rgb_ts, fmt='%.3f')
 
     ############################## init before loop ######################################################################
+    train_target = [''] + ['vo', 'imu'] * 100
     epoch = args.start_epoch
     epoch_step = len(dataset) // args.batch_size
     step_cnt = (args.start_epoch - 1) * epoch_step
     total_step = epoch_step * args.train_epoch
     init_epoch()
+
+    if isfile(f'{trainroot}/1/vo_motion.txt'):
+        prev_vo_motions = np.loadtxt(f'{trainroot}/1/vo_motion.txt')
+        prev_vo_motions = pp.SE3(prev_vo_motions).to(torch.float32).cuda()
     
     ############################## main training loop ######################################################################
     while epoch <= args.train_epoch:    # this while loops per batch (step)
@@ -226,6 +241,7 @@ if __name__ == '__main__':
         try:
             step_cnt += 1
             print('\nStart train step {} at epoch {} ...'.format(step_cnt, epoch))
+            print('Train target:', train_target[epoch])
 
             timer.tic('load')
             # load data batch
@@ -235,8 +251,12 @@ if __name__ == '__main__':
         # procedure when an epoch finishes
         except StopIteration:
             # optimize after each epoch (go through the whole trajectory)
-            vo_optimizer.step()
-            vo_optimizer.zero_grad()
+            if train_target[epoch] == 'vo':
+                vo_optimizer.step()
+                vo_optimizer.zero_grad()
+            elif train_target[epoch] == 'imu':
+                imu_optimizer.step()
+                imu_optimizer.zero_grad()
             
             if imu_module.optm_bias:
                 accel_bias, gyro_bias = optm_bias(
@@ -250,8 +270,12 @@ if __name__ == '__main__':
             if args.save_model_dir is not None and len(args.save_model_dir) > 0:
                 if not isdir('{}/{}'.format(args.save_model_dir, epoch)):
                     makedirs('{}/{}'.format(args.save_model_dir, epoch))
-                save_model_name = '{}/{}/vonet.pkl'.format(args.save_model_dir, epoch)
-                torch.save(tartanvo.vonet.state_dict(), save_model_name)
+                if train_target[epoch] == 'vo':
+                    save_model_name = '{}/{}/vonet.pkl'.format(args.save_model_dir, epoch)
+                    torch.save(tartanvo.vonet.state_dict(), save_model_name)
+                elif train_target[epoch] == 'imu':
+                    save_model_name = '{}/{}/imudenoise.pkl'.format(args.save_model_dir, epoch)
+                    torch.save(imu_module.denoiser.state_dict(), save_model_name)
 
             # loop closure
             if loop_closure is not None:
@@ -259,6 +283,8 @@ if __name__ == '__main__':
                     loop_closure.perform(pp.SE3(np.stack(pgo_poses_list)), tartanvo)
 
             snapshot(final=True)
+
+            prev_vo_motions = pp.SE3(np.stack(vo_motions_list)).cuda()
 
             epoch += 1
             init_epoch()
@@ -268,10 +294,15 @@ if __name__ == '__main__':
         ############################## forward VO ######################################################################
         timer.tic('vo')
 
-        vo_result = tartanvo(sample)
-        motions = vo_result['motion']
-        T_IL = dataset.rgb2imu_pose.to(motions.device)
-        motions = T_IL @ motions @ T_IL.Inv()
+        try:
+            assert train_target[epoch] != 'vo'
+            motions = prev_vo_motions[current_idx:current_idx+args.batch_size]
+            
+        except:
+            vo_result = tartanvo(sample)
+            motions = vo_result['motion']
+            T_IL = dataset.rgb2imu_pose.to(motions.device)
+            motions = T_IL @ motions @ T_IL.Inv()
 
         if args.vo_reverse_edge:
             sample_rev = reverse_sample(sample, False)
@@ -282,7 +313,6 @@ if __name__ == '__main__':
                 motions_rev = tartanvo(sample_rev)['motion']
             motions_rev = T_IL @ motions_rev @ T_IL.Inv()
             
-
         if args.vo_right_cam:
             sample_rcam = reverse_sample(sample, True)
             T_IR = T_IL @ dataset.right2left_pose.to(T_IL.device)
@@ -406,7 +436,7 @@ if __name__ == '__main__':
             imu_drots, imu_dtrans, imu_dvels,
             device='cuda', radius=1e4,
             loss_weight=args.loss_weight,
-            reproj=reproj
+            reproj=reproj, target=train_target[epoch]
         )
         pgo_motions = pose2motion_pypose(pgo_poses)
 

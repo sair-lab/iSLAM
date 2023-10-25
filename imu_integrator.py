@@ -5,7 +5,7 @@ import torch
 from torch import nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from Network.IMUDenoiseNet import IMUCorrector_CNN_GRU
+from Network.IMUDenoiseNet import IMUCorrector_CNN_GRU_WO_COV
 
 
 def prase_init(init=None, motion_mode=False, device='cuda:0'):
@@ -59,7 +59,7 @@ class IMUModule:
         self.gyro_bias = torch.tensor(gyro_bias, dtype=dtype).to(device)
 
         if self.use_denoise_model:
-            self.denoiser = IMUCorrector_CNN_GRU()
+            self.denoiser = IMUCorrector_CNN_GRU_WO_COV()
             pretrain = torch.load(denoise_model_name)
             self.denoiser.load_state_dict(pretrain)
             self.denoiser = self.denoiser.to(device)
@@ -146,7 +146,7 @@ class IMUModule:
                 
                 if self.use_denoise_model and imu_frame_end - imu_frame_st >= 10:
                     data = {'acc':acc, 'gyro':gyro}
-                    denoised_accels, denoised_gyros, acc_cov, gyro_cov = self.denoiser(data, eval=True)
+                    denoised_accels, denoised_gyros, acc_cov, gyro_cov = self.denoiser(data, eval=not motion_mode)
                     if self.denoise_accel:
                         acc = denoised_accels
                     if self.denoise_gyro:

@@ -37,9 +37,9 @@ loss_weight='(1.5,0.125,1.6875,0.025)'
 rot_w=1
 trans_w=0.1
 batch_size=8
-lr=1e-6
-epoch=17
-start_epoch=1
+lr=3e-6
+epoch=100
+start_epoch=51
 train_portion=1
 
 use_scale=false
@@ -49,7 +49,7 @@ else
     exp_type='stereo'
 fi
 
-# project_name=test_tartanair
+# project_name=test_tartanair_P000
 project_name=$2
 train_name=exp_bs=${batch_size}_lr=${lr}_lw=${loss_weight}_${exp_type}
 
@@ -59,10 +59,10 @@ echo "train name = ${train_name}"
 echo "data dir = ${data_dir}"
 echo "=============================================="
 
-if [ "$start_epoch" = 1 ]; then
-    rm -r train_results/${project_name}/${train_name}
-    rm -r train_results_models/${project_name}/${train_name}
-fi
+# if [ "$start_epoch" = 1 ]; then
+#     rm -r train_results/${project_name}/${train_name}
+#     rm -r train_results_models/${project_name}/${train_name}
+# fi
 mkdir -p train_results/${project_name}/${train_name}
 mkdir -p train_results_models/${project_name}/${train_name}
 

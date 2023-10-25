@@ -25,8 +25,6 @@ class IMUCorrector_CNN_GRU_WO_COV(nn.Module):
             nn.GELU()
         )
 
-        self.imu = pp.module.IMUPreintegrator(reset=True, prop_cov=True)
-
     def forward(self, data, eval=True):
         self.train() if not eval else self.eval()
         with torch.set_grad_enabled(not eval):
@@ -61,14 +59,7 @@ class IMUCorrector_CNN_GRU_WO_COV(nn.Module):
 
             # print(corrected_acc.shape, corrected_gyro.shape, acc_cov.shape, gyro_cov.shape)
 
-            if eval:
-                return corrected_acc, corrected_gyro, None, None
-            else:
-                return self.imu(
-                    init_state=data['init_state'], dt=data['dt'].unsqueeze(-1),
-                    gyro=corrected_gyro, acc=corrected_acc,
-
-                )
+            return corrected_acc, corrected_gyro, None, None
                 
 class IMUCorrector_CNN_GRU(nn.Module):
     def __init__(self, in_channel=6, out_channel=64, hidden_size=128, kernel_size=10, num_layers=1):

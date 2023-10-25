@@ -76,7 +76,7 @@ data_name = [
 
 for dn in data_name:
     dir = data_root + '/' + dn.replace('_', '/')
-    res_name = dn + '_denoise'
+    res_name = dn + '_alternative'
 
     cmd = "sh run_tartanair.sh {} {}".format(dir, res_name)
 
