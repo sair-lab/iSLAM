@@ -132,8 +132,8 @@ class TartanAirTrajFolderLoader:
 
             with open(imudir + '/parameter.yaml', 'r') as file:
                 paras = yaml.safe_load(file)
-            self.accel_bias = np.array(paras['acc_zero_bias'])
-            self.gyro_bias = np.array(paras['gyro_zero_bias'])
+            self.accel_bias = np.array(paras['acc_zero_bias'], dtype=np.float32)
+            self.gyro_bias = np.array(paras['gyro_zero_bias'], dtype=np.float32)
 
             self.has_imu = True
 
@@ -320,8 +320,8 @@ class KITTITrajFolderLoader:
         self.accels = np.array([[oxts_frame.packet.ax, oxts_frame.packet.ay, oxts_frame.packet.az] for oxts_frame in dataset.oxts]).astype(np.float32)
         self.gyros = np.array([[oxts_frame.packet.wx, oxts_frame.packet.wy, oxts_frame.packet.wz] for oxts_frame in dataset.oxts]).astype(np.float32)
 
-        self.accel_bias = np.zeros(3)
-        self.gyro_bias = np.zeros(3)
+        self.accel_bias = np.zeros(3, dtype=np.float32)
+        self.gyro_bias = np.zeros(3, dtype=np.float32)
 
         self.imu_dts = np.diff(ts_imu).astype(np.float32)
         self.imu_ts = np.array(ts_imu).astype(np.float64) - ts_imu[0]
@@ -423,8 +423,8 @@ class TrajFolderDatasetBase(Dataset):
             self.imu_init = {'rot':self.poses[0, 3:], 'pos':self.poses[0, :3], 'vel':self.vels[0]}
             self.gravity = loader.gravity
 
-            self.accel_bias = loader.accel_bias[start_imu:end_imu]
-            self.gyro_bias = loader.gyro_bias[start_imu:end_imu]
+            self.accel_bias = loader.accel_bias
+            self.gyro_bias = loader.gyro_bias
 
             self.imu_motions = None
             self.has_imu = True

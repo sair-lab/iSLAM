@@ -191,7 +191,7 @@ class IMUFwd(nn.Module):
         self.accel_bias = torch.nn.Parameter(accel_bias.clone())
         self.gyro_bias = torch.nn.Parameter(gyro_bias.clone())
 
-        init_pos, init_rot, init_vel = prase_init(init, device)
+        init_pos, init_rot, init_vel = prase_init(init, motion_mode=False, device=device)
         self.integrator = pp.module.IMUPreintegrator(gravity=float(gravity)).to(device)
         self.init = {'rot':init_rot, 'pos':init_pos, 'vel':init_vel}
         
@@ -209,6 +209,19 @@ class IMUFwd(nn.Module):
         transerr = torch.nn.functional.mse_loss(poses.translation(), state['pos'][..., sync, :].squeeze())
 
         return roterr + transerr
+    
+    def calc_pose(self, sync):
+        dts = self.dts
+        accels = self.accels - self.accel_bias.view(1, 3)
+        gyros = self.gyros - self.gyro_bias.view(1, 3)
+
+        print(self.init)
+
+        state = self.integrator(dt=dts, gyro=gyros, acc=accels, init_state=self.init)
+
+        poses = pp.SE3(torch.cat((state['pos'][..., sync, :].squeeze(), state['rot'][..., sync, :].tensor().squeeze()), dim=1))
+
+        return poses
                 
 
 def optm_bias(lr, epoch, poses, sync, accels, gyros, accel_bias, gyro_bias, dts, init, gravity, device='cuda:0'):
@@ -220,6 +233,8 @@ def optm_bias(lr, epoch, poses, sync, accels, gyros, accel_bias, gyro_bias, dts,
 
     loss1 = imu(poses, sync)
 
+    poses_before = imu.calc_pose(sync)
+
     for epoch_i in range(epoch):
         optimizer.zero_grad()
         loss = imu(poses, sync)
@@ -227,12 +242,14 @@ def optm_bias(lr, epoch, poses, sync, accels, gyros, accel_bias, gyro_bias, dts,
         optimizer.step()
         scheduler.step(loss)
 
-        # print('IMU loss:', loss.item(), '\tlr=', scheduler._last_lr)
+        print('IMU loss:', loss.item(), '\tlr=', scheduler._last_lr)
 
     loss2 = imu(poses, sync)
     print(f'IMU loss: {loss1.item()} -> {loss2.item()}')
 
-    return imu.accel_bias.detach(), imu.gyro_bias.detach()
+    poses_after = imu.calc_pose(sync)
+
+    return imu.accel_bias.detach(), imu.gyro_bias.detach(), poses_before, poses_after
 
 
 if __name__ == '__main__':
@@ -240,8 +257,9 @@ if __name__ == '__main__':
     from Datasets.TrajFolderDataset import TrajFolderDataset
 
     # data_root = '/data/euroc/MH_01_easy/mav0'
-    data_root = '/data/kitti/2011_09_30/2011_09_30_drive_0018_sync'
-    data_type = 'kitti'
+    # data_root = '/data/kitti/2011_09_30/2011_09_30_drive_0018_sync'
+    data_root = '/data/tartanair_coord/soulcity/Easy/P000'
+    data_type = 'tartanair'
     start_frame = 0
     end_frame = -1
 
@@ -259,22 +277,53 @@ if __name__ == '__main__':
         start_frame=start_frame, end_frame=end_frame
     )
 
-    accel_bias = torch.tensor(dataset.accel_bias[0])
-    gyro_bias = torch.tensor(dataset.gyro_bias[0])
+    import numpy as np
+    dataset.accels = np.loadtxt(data_root+'/imu/acc.txt', dtype=np.float32)
+    dataset.accels = dataset.accels[dataset.rgb2imu_sync[0]:dataset.rgb2imu_sync[-1]+1]
+    dataset.gravity = float(-9.8)
+
+    accel_bias = torch.tensor(dataset.accel_bias)
+    gyro_bias = torch.tensor(dataset.gyro_bias)
     # accel_bias = torch.zeros(3)
     # gyro_bias = torch.zeros(3)
     poses = pp.SE3(dataset.poses).cuda()
 
-    print(accel_bias)
-    print(gyro_bias)
-
-    accel_bias, gyro_bias = optm_bias(
+    accel_bias, gyro_bias, poses_before, poses_after = optm_bias(
         1e-5, 50, poses, dataset.rgb2imu_sync, dataset.accels, dataset.gyros,
         accel_bias, gyro_bias, dataset.imu_dts, dataset.imu_init, dataset.gravity
     )
+    poses_before = poses_before.detach().cpu().numpy()
+    poses_after = poses_after.detach().cpu().numpy()
+
+    print(dataset.poses[0], dataset.vels[0])
 
     print(accel_bias)
     print(gyro_bias)
+
+    import matplotlib.pyplot as plt
+
+    def plot3d(ax, poses, col):
+        poses = pp.SE3(poses)
+
+        p = poses.translation().numpy()
+        ax.plot(p[:, 0], p[:, 1], p[:, 2], c=col, linewidth=3)
+
+        axis_scale = 0
+        for i in range(0, len(poses), 10):
+            x = poses[i] @ (torch.tensor([1, 0, 0], dtype=torch.float32) * axis_scale)
+            y = poses[i] @ (torch.tensor([0, 1, 0], dtype=torch.float32) * axis_scale)
+            z = poses[i] @ (torch.tensor([0, 0, 1], dtype=torch.float32) * axis_scale)
+
+            ax.plot([p[i,0], x[0]], [p[i,1], x[1]], [p[i,2], x[2]], c='r')
+            ax.plot([p[i,0], y[0]], [p[i,1], y[1]], [p[i,2], y[2]], c='g')
+            ax.plot([p[i,0], z[0]], [p[i,1], z[1]], [p[i,2], z[2]], c='b')
+
+    ax = plt.figure().add_subplot(projection='3d')
+    plot3d(ax, dataset.poses, 'g')
+    plot3d(ax, poses_before, 'r')
+    plot3d(ax, poses_after, 'b')
+    plt.show()
+
 
 
 # if __name__ == '__main__':
