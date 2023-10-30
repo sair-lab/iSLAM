@@ -39,7 +39,7 @@ trans_w=0.1
 batch_size=8
 lr=3e-6
 epoch=100
-start_epoch=51
+start_epoch=1
 train_portion=1
 
 use_scale=false
@@ -74,6 +74,7 @@ if [ "$use_scale" = true ]; then
         --project-name ${project_name} \
         --train-name ${train_name} \
         --vo-model-name ./models/stereo_cvt_tartanvo_1914.pkl \
+        --imu-denoise-model-name ./models/1022_tartanair_all_len80_10_1_0_direct_supervise_epoch_210_train_loss_0.001068338142439274.pth \
         --batch-size ${batch_size} \
         --worker-num 2 \
         --data-root ${data_dir} \

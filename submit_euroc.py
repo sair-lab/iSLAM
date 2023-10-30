@@ -10,7 +10,7 @@ elif machine == '4090':
     data_root = '/data/euroc'
 
 data_name = [
-    # 'MH_01_easy',
+    'MH_01_easy',
     'MH_02_easy',
     'MH_03_medium',
     'MH_04_difficult',
@@ -25,7 +25,7 @@ data_name = [
 
 for dn in data_name:
     dir = data_root + '/' + dn + '/mav0'
-    res_name = dn + '_optmbias'
+    res_name = dn + '_alternative_80'
 
     if machine == 'ccr':
         cmd = "sbatch run_euroc.sh {} {}".format(dir, res_name)
