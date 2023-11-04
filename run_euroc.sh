@@ -39,7 +39,7 @@ trans_w=0.1
 batch_size=8
 lr=3e-6
 epoch=100
-start_epoch=1
+start_epoch=60
 train_portion=1
 
 use_scale=false
