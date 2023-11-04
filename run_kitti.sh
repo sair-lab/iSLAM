@@ -29,16 +29,16 @@
 
 # export CUDA_VISIBLE_DEVICES=1
 
-# data_dir=/home/data2/kitti_raw/2011_10_03/2011_10_03_drive_0042_sync
+data_dir=/home/data2/kitti_raw/2011_09_30/2011_09_30_drive_0018_sync
 # data_dir=/data/kitti/2011_09_30/2011_09_30_drive_0018_sync
-data_dir=$1
+# data_dir=$1
 
 loss_weight='(1,0.1,10,0.1)'
 rot_w=1
 trans_w=0.1
 batch_size=8
 lr=3e-6
-epoch=100
+epoch=1
 start_epoch=1
 train_portion=1
 
@@ -49,8 +49,8 @@ else
     exp_type='stereo'
 fi
 
-# project_name=test_kitti_optmbias
-project_name=$2
+project_name=test_kitti_map
+# project_name=$2
 train_name=exp_bs=${batch_size}_lr=${lr}_lw=${loss_weight}_${exp_type}
 
 echo "=============================================="
@@ -100,7 +100,6 @@ else
         --project-name ${project_name} \
         --train-name ${train_name} \
         --vo-model-name ./models/stereo_cvt_tartanvo_1914.pkl \
-        --imu-denoise-model-name ./models/1025_kitti_no_cov_1layer_epoch_100_train_loss_3.092334827756494.pth \
         --batch-size ${batch_size} \
         --worker-num 2 \
         --data-root ${data_dir} \
@@ -116,5 +115,6 @@ else
         --fix-model-parts 'flow' 'stereo' \
         --rot-w ${rot_w} \
         --trans-w ${trans_w} \
-        --train-portion ${train_portion}
+        --train-portion ${train_portion} \
+        --enable-mapping
 fi

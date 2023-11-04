@@ -9,8 +9,10 @@ from pyntcloud import PyntCloud
 
 
 class Mapper:
-    def __init__(self):
+    def __init__(self, rgb2imu_pose):
         self.frame_points = []
+        self.local_points = []
+        self.rgb2imu_pose = rgb2imu_pose
 
     def add_frame(self, image, depth, pose, fx, fy, cx, cy, mask=None, sample_rate=0.1):
         height, width = depth.shape
@@ -23,9 +25,9 @@ class Mapper:
         uv1 = torch.stack([u, v, torch.ones_like(u)])
 
         if isinstance(pose, pp.LieTensor):
-            T = pose
+            T = pose @ self.rgb2imu_pose
         else:
-            T = pp.SE3(pose)
+            T = pp.SE3(pose) @ self.rgb2imu_pose
         K = torch.tensor([fx, 0, cx, 0, fy, cy, 0, 0, 1], dtype=torch.float32).view(3, 3)
         K_inv = torch.linalg.inv(K)
 
@@ -52,6 +54,7 @@ class Mapper:
         points = torch.cat([points_world, colors.view(-1, 3)], dim=1)
 
         self.frame_points.append(points)
+        self.local_points.append(torch.cat([points_local, colors.view(-1, 3)], dim=1))
 
     def generate_cloud(self):
         return torch.cat(self.frame_points, dim=0).numpy()
@@ -66,12 +69,16 @@ class Mapper:
             data=np.hstack((pos, col)),
             columns=["x", "y", "z", "blue", "green", "red"]
         ))
-
         cloud.to_file(fname)
 
     def save_data(self, fname):
+        for i, pts in enumerate(self.local_points):
+            np.savetxt(fname+'.'+str(i), pts)
+
         points = self.generate_cloud()
         np.savetxt(fname, points)
+
+        np.savetxt(fname+'.calib', self.rgb2imu_pose.numpy())
 
 
 def normalize_3d(ax):
