@@ -55,7 +55,7 @@ def init_epoch():
     covs_dict_list = {}
 
     global mapper
-    mapper = Mapper()
+    mapper = Mapper(dataset.rgb2imu_pose)
 
 
 def snapshot(final=False):
@@ -259,7 +259,7 @@ if __name__ == '__main__':
                 imu_optimizer.zero_grad()
             
             if imu_module.optm_bias:
-                accel_bias, gyro_bias = optm_bias(
+                accel_bias, gyro_bias, _, _ = optm_bias(
                     args.imu_lr, args.imu_epoch, np.stack(pgo_poses_list), dataset.rgb2imu_sync[:len(pgo_poses_list)],
                     dataset.accels, dataset.gyros, imu_module.accel_bias, imu_module.gyro_bias,
                     dataset.imu_dts, dataset.imu_init, dataset.gravity, device='cuda'
@@ -481,10 +481,10 @@ if __name__ == '__main__':
 
         ############################## mapping ######################################################################
         if not args.use_gt_scale and args.enable_mapping:
-            depths = vo_result['depth']
-            masks = vo_result['mask']
+            depths = vo_result['depth'].detach().cpu()
+            masks = vo_result['depth_mask'].detach().cpu()
 
-            for i in range(0, args.batch_size, 2):
+            for i in range(0, args.batch_size, 1):
                 img = sample['img0'][i].permute(1, 2, 0).numpy()
                 img = cv2.resize(img, None, fx=1/4, fy=1/4, interpolation=cv2.INTER_LINEAR)
                 img = torch.from_numpy(img).permute(2, 0, 1)
@@ -492,7 +492,7 @@ if __name__ == '__main__':
                 intrinsic_calib = sample['intrinsic_calib']
                 fx, fy, cx, cy = intrinsic_calib[i] / 4
 
-                mapper.add_frame(img, depths[i], pp.SE3(pgo_poses[i]) @ dataset.rgb2imu_pose, fx, fy, cx, cy, masks[i])
+                mapper.add_frame(img, depths[i], pp.SE3(pgo_poses[i]), fx, fy, cx, cy, masks[i], sample_rate=1)
 
         ############################## log and snapshot ######################################################################
         timer.tic('print')

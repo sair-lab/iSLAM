@@ -30,7 +30,7 @@
 # export CUDA_VISIBLE_DEVICES=7
 
 # data_dir=/projects/academic/cwx/euroc/V2_03_difficult/mav0
-# data_dir=/data/euroc/MH_01_easy/mav0
+# data_dir=/home/data2/euroc_raw/MH_01_easy/mav0
 data_dir=$1
 
 loss_weight='(4,0.1,2,0.1)'
@@ -39,17 +39,17 @@ trans_w=0.1
 batch_size=8
 lr=3e-6
 epoch=100
-start_epoch=60
+start_epoch=1
 train_portion=1
 
-use_scale=false
+use_scale=true
 if [ "$use_scale" = true ]; then
     exp_type='mono'
 else
     exp_type='stereo'
 fi
 
-# project_name=test_euroc_optmbias
+# project_name=test_euroc_map
 project_name=$2
 train_name=exp_bs=${batch_size}_lr=${lr}_lw=${loss_weight}_${exp_type}
 

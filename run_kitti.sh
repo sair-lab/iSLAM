@@ -29,7 +29,7 @@
 
 # export CUDA_VISIBLE_DEVICES=1
 
-# data_dir=/home/data2/kitti_raw/2011_10_03/2011_10_03_drive_0042_sync
+# data_dir=/home/data2/kitti_raw/2011_09_30/2011_09_30_drive_0018_sync
 # data_dir=/data/kitti/2011_09_30/2011_09_30_drive_0018_sync
 data_dir=$1
 
@@ -49,7 +49,7 @@ else
     exp_type='stereo'
 fi
 
-# project_name=test_kitti_optmbias
+# project_name=test_kitti_map
 project_name=$2
 train_name=exp_bs=${batch_size}_lr=${lr}_lw=${loss_weight}_${exp_type}
 
