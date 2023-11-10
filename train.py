@@ -199,11 +199,11 @@ if __name__ == '__main__':
         idx = euroc_raw2short(dataset.datadir)
         loop_edges_file = f'./{folder}/result_euroc-{idx}/loop_ransac.txt'
         loop_motions_file = f'./{folder}/result_euroc-{idx}/loop_ransac_motion.txt'
-    # if isfile(loop_edges_file):
-    #     loop_closure = LoopClosure(dataset, args.batch_size, loop_edges_file, loop_motions_file)
-    # else:
-    #     loop_closure = None
-    loop_closure = None
+    if isfile(loop_edges_file):
+        loop_closure = LoopClosure(dataset, args.batch_size, loop_edges_file, loop_motions_file)
+    else:
+        loop_closure = None
+    # loop_closure = None
 
     # for debug, output edge figures
     if loop_closure is not None:
