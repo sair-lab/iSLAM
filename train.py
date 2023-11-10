@@ -199,6 +199,8 @@ if __name__ == '__main__':
         idx = euroc_raw2short(dataset.datadir)
         loop_edges_file = f'./{folder}/result_euroc-{idx}/loop_ransac.txt'
         loop_motions_file = f'./{folder}/result_euroc-{idx}/loop_ransac_motion.txt'
+    else:
+        loop_edges_file = ''
     if isfile(loop_edges_file):
         loop_closure = LoopClosure(dataset, args.batch_size, loop_edges_file, loop_motions_file)
     else:
