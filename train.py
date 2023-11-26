@@ -118,17 +118,17 @@ if __name__ == '__main__':
 
     torch.set_float32_matmul_precision('high')
 
-    print('\ndevice:', torch.cuda.get_device_name(), '\tcount:', torch.cuda.device_count())
+    # print('\ndevice:', torch.cuda.get_device_name(), '\tcount:', torch.cuda.device_count())
     args = get_args()
-    print('\n==============================================')
-    print(args)
-    print('==============================================\n')
+    # print('\n==============================================')
+    # print(args)
+    # print('==============================================\n')
 
     trainroot = args.result_dir
 
     ############################## init dataset ######################################################################   
     timer.tic('dataset')
-    print('Loading dataset ...')
+    # print('Loading dataset ...')
     
     mean = [0.485, 0.456, 0.406]
     std = [0.229, 0.224, 0.225]
@@ -147,7 +147,7 @@ if __name__ == '__main__':
                             shuffle=False, drop_last=True)
 
     timer.toc('dataset')
-    print('Load dataset time:', timer.tot('dataset'))
+    # print('Load dataset time:', timer.tot('dataset'))
 
     ############################## init VO model ######################################################################
     pose_model_name = args.pose_model_name
@@ -156,6 +156,9 @@ if __name__ == '__main__':
             last_model_name = '{}/{}/vonet.pkl'.format(args.save_model_dir, i)
             if isfile(last_model_name):
                 pose_model_name = last_model_name
+                print('!'*20)
+                print('Using VO model', pose_model_name)
+                print('!'*20)
                 break
     tartanvo = TartanVO(
         vo_model_name=args.vo_model_name, pose_model_name=pose_model_name, 
@@ -175,6 +178,9 @@ if __name__ == '__main__':
             last_model_name = '{}/{}/imudenoise.pkl'.format(args.save_model_dir, i)
             if isfile(last_model_name):
                 imu_denoise_model_name = last_model_name
+                print('!'*20)
+                print('Using IMU model', imu_denoise_model_name)
+                print('!'*20)
                 break
     imu_module = IMUModule(
         dataset.accels, dataset.gyros, dataset.imu_dts,
@@ -208,15 +214,15 @@ if __name__ == '__main__':
     # loop_closure = None
 
     # for debug, output edge figures
-    if loop_closure is not None:
-        for l in loop_closure.loop_edges:
-            s = dataset.get_pair(l[0], l[1])
-            img0 = s['img0'].permute(1, 2, 0).numpy()
-            img1 = s['img1'].permute(1, 2, 0).numpy()
-            img0 = (img0 * 255).astype(np.uint8)
-            img1 = (img1 * 255).astype(np.uint8)
-            cv2.imwrite(trainroot+'/'+str(l[0].item())+'.png', img0)
-            cv2.imwrite(trainroot+'/'+str(l[1].item())+'.png', img1)
+    # if loop_closure is not None:
+        # for l in loop_closure.loop_edges:
+        #     s = dataset.get_pair(l[0], l[1])
+        #     img0 = s['img0'].permute(1, 2, 0).numpy()
+        #     img1 = s['img1'].permute(1, 2, 0).numpy()
+        #     img0 = (img0 * 255).astype(np.uint8)
+        #     img1 = (img1 * 255).astype(np.uint8)
+        #     cv2.imwrite(trainroot+'/'+str(l[0].item())+'.png', img0)
+        #     cv2.imwrite(trainroot+'/'+str(l[1].item())+'.png', img1)
 
     ############################## logs before running ######################################################################
     with open(trainroot+'/args.txt', 'w') as f:
@@ -225,7 +231,8 @@ if __name__ == '__main__':
     np.savetxt(trainroot+'/timestamp.txt', dataset.rgb_ts, fmt='%.3f')
 
     ############################## init before loop ######################################################################
-    train_target = [''] + ['vo', 'imu'] * 100
+    # train_target = [''] + ['vo', 'imu'] * 100
+    train_target = [''] + ['vo'] * 200
     epoch = args.start_epoch
     epoch_step = len(dataset) // args.batch_size
     step_cnt = (args.start_epoch - 1) * epoch_step
@@ -242,8 +249,8 @@ if __name__ == '__main__':
 
         try:
             step_cnt += 1
-            print('\nStart train step {} at epoch {} ...'.format(step_cnt, epoch))
-            print('Train target:', train_target[epoch])
+            # print('\nStart train step {} at epoch {} ...'.format(step_cnt, epoch))
+            # print('Train target:', train_target[epoch])
 
             timer.tic('load')
             # load data batch
@@ -477,7 +484,8 @@ if __name__ == '__main__':
         if np.any(rot_mask) or np.any(trans_mask):
             loss_bp = torch.cat((args.rot_w * rot_loss[rot_mask], args.trans_w * trans_loss[trans_mask]))
             # only backpropagate, no optimize
-            loss_bp.backward(torch.ones_like(loss_bp))
+            if loss_bp.requires_grad:
+                loss_bp.backward(torch.ones_like(loss_bp))
 
         timer.toc('opt')
 
@@ -497,30 +505,30 @@ if __name__ == '__main__':
                 mapper.add_frame(img, depths[i], pp.SE3(pgo_poses[i]), fx, fy, cx, cy, masks[i], sample_rate=1)
 
         ############################## log and snapshot ######################################################################
-        timer.tic('print')
+        # timer.tic('print')
 
-        if step_cnt % args.print_interval == 0:
-            st = current_idx
-            end = current_idx + args.batch_size
-            poses_gt = dataset.poses[st:end+1]
-            motions_gt = dataset.motions[st:end]
-            motions_gt = cvtSE3_pypose(motions_gt).numpy()
+        # if step_cnt % args.print_interval == 0:
+        #     st = current_idx
+        #     end = current_idx + args.batch_size
+        #     poses_gt = dataset.poses[st:end+1]
+        #     motions_gt = dataset.motions[st:end]
+        #     motions_gt = cvtSE3_pypose(motions_gt).numpy()
             
-            vo_R_errs, vo_t_errs, R_norms, t_norms = calc_motion_error(motions_gt, motions_np, allow_rescale=False)
-            print('Pred: R:%.5f t:%.5f' % (np.mean(vo_R_errs), np.mean(vo_t_errs)))
+        #     vo_R_errs, vo_t_errs, R_norms, t_norms = calc_motion_error(motions_gt, motions_np, allow_rescale=False)
+        #     print('Pred: R:%.5f t:%.5f' % (np.mean(vo_R_errs), np.mean(vo_t_errs)))
             
-            pgo_R_errs, pgo_t_errs, _, _ = calc_motion_error(motions_gt, pgo_motions, allow_rescale=False)
-            print('PVGO: R:%.5f t:%.5f' % (np.mean(pgo_R_errs), np.mean(pgo_t_errs)))
+        #     pgo_R_errs, pgo_t_errs, _, _ = calc_motion_error(motions_gt, pgo_motions, allow_rescale=False)
+        #     print('PVGO: R:%.5f t:%.5f' % (np.mean(pgo_R_errs), np.mean(pgo_t_errs)))
 
-            print('Norm: R:%.5f t:%.5f' % (np.mean(R_norms), np.mean(t_norms)))
+        #     print('Norm: R:%.5f t:%.5f' % (np.mean(R_norms), np.mean(t_norms)))
 
-            pose_R_errs, pose_t_errs, _, _ = calc_motion_error(poses_gt, np.array(vo_poses_list[st:end+1]), allow_rescale=False)
-            print('VO P: R:%.5f t:%.5f' % (np.mean(pose_R_errs), np.mean(pose_t_errs)))
+        #     pose_R_errs, pose_t_errs, _, _ = calc_motion_error(poses_gt, np.array(vo_poses_list[st:end+1]), allow_rescale=False)
+        #     print('VO P: R:%.5f t:%.5f' % (np.mean(pose_R_errs), np.mean(pose_t_errs)))
 
-            pose_R_errs, pose_t_errs, _, _ = calc_motion_error(poses_gt, pgo_poses, allow_rescale=False)
-            print('PG P: R:%.5f t:%.5f' % (np.mean(pose_R_errs), np.mean(pose_t_errs)))
+        #     pose_R_errs, pose_t_errs, _, _ = calc_motion_error(poses_gt, pgo_poses, allow_rescale=False)
+        #     print('PG P: R:%.5f t:%.5f' % (np.mean(pose_R_errs), np.mean(pose_t_errs)))
 
-        timer.toc('print')
+        # timer.toc('print')
 
         timer.tic('snapshot')
 
@@ -537,12 +545,12 @@ if __name__ == '__main__':
 
         timer.toc('step')
 
-        print('[time] step: {:.3f}, load: {:.3f}, vo: {:.3f}, pgo: {:.3f}, opt: {:.3f}'.format(
-            timer.last('step'), timer.last('load'), timer.last('vo'), timer.last('pgo'), timer.last('opt'), 
-        ))
+        # print('[time] step: {:.3f}, load: {:.3f}, vo: {:.3f}, pgo: {:.3f}, opt: {:.3f}'.format(
+        #     timer.last('step'), timer.last('load'), timer.last('vo'), timer.last('pgo'), timer.last('opt'), 
+        # ))
 
-        print('Epoch progress: {:.2%}, time left {:.2f}min'.format((step_cnt-epoch_step*(epoch-1))/epoch_step, (epoch_step*epoch-step_cnt)*timer.avg('step')/60))
-        print('Train progress: {:.2%}, time left {:.2f}min'.format(step_cnt/total_step, (total_step-step_cnt)*timer.avg('step')/60))
+        print('\rEpoch progress: {:.2%}, time left {:.2f}min'.format((step_cnt-epoch_step*(epoch-1))/epoch_step, (epoch_step*epoch-step_cnt)*timer.avg('step')/60), end='')
+        # print('Train progress: {:.2%}, time left {:.2f}min'.format(step_cnt/total_step, (total_step-step_cnt)*timer.avg('step')/60))
 
         # for test
         # if step_cnt >= 5:

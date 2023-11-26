@@ -30,17 +30,17 @@ class TartanVO(nn.Module):
 
         # load the whole model
         if vo_model_name is not None and vo_model_name != "":
-            print('Loading vo network...')
+            # print('Loading vo network...')
             self.load_model(self.vonet, vo_model_name)
         # can override part of the model
         if flow_model_name is not None and flow_model_name != "":
-            print('Loading flow network...')
+            # print('Loading flow network...')
             self.load_model(self.vonet.flowNet, flow_model_name)
         if pose_model_name is not None and pose_model_name != "":
-            print('Loading pose network...')
+            # print('Loading pose network...')
             self.load_model(self.vonet.flowPoseNet, pose_model_name)
         if stereo_model_name is not None and stereo_model_name != "":
-            print('Loading stereo network...')
+            # print('Loading stereo network...')
             self.load_model(self.vonet.stereoNet, stereo_model_name)
         
         self.vonet = self.vonet.cuda(self.device_id)
