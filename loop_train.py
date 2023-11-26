@@ -1,6 +1,8 @@
 import os
 
 sh = '''
+export CUDA_VISIBLE_DEVICES=2
+
 data_dir=[DATA_DIR]
 
 loss_weight='(1,0.1,10,0.1)'
@@ -14,7 +16,7 @@ train_portion=1
 
 exp_type='stereo'
 
-project_name=loop_train_kitti_2
+project_name=[TRAIN_NAME]
 train_name=exp_bs=${batch_size}_lr=${lr}_lw=${loss_weight}_${exp_type}
 
 echo "=============================================="
@@ -52,6 +54,7 @@ python train.py \
     --train-portion ${train_portion}
 '''
 
+# trainname = 'loop_train_kitti'
 # data_name_train = [
 #     '2011_10_03_drive_0042',
 #     '2011_10_03_drive_0034',
@@ -69,20 +72,57 @@ python train.py \
 # ]
 
 # 2
+# trainname = 'loop_train_kitti_2'
+# data_name_train = [
+#     '2011_10_03_drive_0042',
+#     '2011_09_30_drive_0016',
+#     '2011_09_30_drive_0020',
+#     '2011_10_03_drive_0027',
+#     '2011_09_30_drive_0028',
+# ]
+
+# data_name_test = [
+#     '2011_09_30_drive_0018',
+#     '2011_10_03_drive_0034',
+#     '2011_09_30_drive_0027',
+#     '2011_09_30_drive_0033',
+#     '2011_09_30_drive_0034'
+# ]
+
+# 3
+# trainname = 'loop_train_kitti_3'
+# data_name_train = [
+#     '2011_09_30_drive_0034',
+#     '2011_09_30_drive_0020',
+#     '2011_10_03_drive_0027',#
+#     '2011_09_30_drive_0028',#
+#     '2011_09_30_drive_0033',
+# ]
+
+# data_name_test = [
+#     '2011_09_30_drive_0016',
+#     '2011_09_30_drive_0018',
+#     '2011_10_03_drive_0034',
+#     '2011_09_30_drive_0027',#
+#     '2011_10_03_drive_0042',
+# ]
+
+# 4
+trainname = 'loop_train_kitti_4'
 data_name_train = [
-    '2011_10_03_drive_0042',
-    '2011_09_30_drive_0016',
-    '2011_09_30_drive_0020',
-    '2011_10_03_drive_0027',
-    '2011_09_30_drive_0028',
+    '2011_09_30_drive_0034',
+    '2011_10_03_drive_0034',
+    '2011_10_03_drive_0027',#
+    '2011_09_30_drive_0028',#
+    '2011_09_30_drive_0033',
 ]
 
 data_name_test = [
+    '2011_09_30_drive_0020',
+    '2011_09_30_drive_0016',
     '2011_09_30_drive_0018',
-    '2011_10_03_drive_0034',
-    '2011_09_30_drive_0027',
-    '2011_09_30_drive_0033',
-    '2011_09_30_drive_0034'
+    '2011_09_30_drive_0027',#
+    '2011_10_03_drive_0042',
 ]
 
 epoch = 1
@@ -90,7 +130,7 @@ ptr = 0
 while epoch <= 100:
     dataname = data_name_train[ptr]
     datadir = f'/data/kitti/{dataname[:10]}/{dataname}_sync'
-    cmd = sh.replace('[DATA_DIR]', datadir).replace('[START_EPOCH]', str(epoch)).replace('[EPOCH]', str(epoch))
+    cmd = sh.replace('[DATA_DIR]', datadir).replace('[START_EPOCH]', str(epoch)).replace('[EPOCH]', str(epoch)).replace('[TRAIN_NAME]', trainname)
     os.system(cmd)
 
     epoch += 1
@@ -99,7 +139,15 @@ while epoch <= 100:
     if (epoch-1) % 5 == 0:
         for dataname in data_name_test:
             datadir = f'/data/kitti/{dataname[:10]}/{dataname}_sync'
-            cmd = sh.replace('[DATA_DIR]', datadir).replace('[START_EPOCH]', str(epoch)).replace('[EPOCH]', str(epoch))
+            cmd = sh.replace('[DATA_DIR]', datadir).replace('[START_EPOCH]', str(epoch)).replace('[EPOCH]', str(epoch)).replace('[TRAIN_NAME]', trainname)
             os.system(cmd)
-            resultdir = '/home/tymon/iSLAM/train_results/loop_train_kitti/exp_bs=8_lr=3e-6_lw=\(1,0.1,10,0.1\)_stereo'
+            resultdir = f'/home/tymon/iSLAM/train_results/{trainname}/exp_bs=8_lr=3e-6_lw=\(1,0.1,10,0.1\)_stereo'
             os.system(f'mv {resultdir}/{epoch} {resultdir}/{epoch-1}_test_{dataname}')
+
+# epoch = 6
+# for dataname in data_name_test:
+#     datadir = f'/data/kitti/{dataname[:10]}/{dataname}_sync'
+#     cmd = sh.replace('[DATA_DIR]', datadir).replace('[START_EPOCH]', str(epoch)).replace('[EPOCH]', str(epoch)).replace('[TRAIN_NAME]', trainname)
+#     os.system(cmd)
+#     resultdir = f'/home/tymon/iSLAM/train_results/{trainname}/exp_bs=8_lr=3e-6_lw=\(1,0.1,10,0.1\)_stereo'
+#     os.system(f'mv {resultdir}/{epoch} {resultdir}/{epoch-1}_test_{dataname}')
