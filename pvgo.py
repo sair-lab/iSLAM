@@ -4,8 +4,6 @@ import numpy as np
 import torch
 from torch import nn
 
-from dataset_statistics import kitti_imu_func, kitti_vo_func
-
 import pypose as pp
 import pypose.optim.solver as ppos
 import pypose.optim.kernel as ppok
@@ -131,33 +129,6 @@ class PoseVelGraph(nn.Module):
 def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtrans, imu_dvels, 
                 device='cuda:0', radius=1e4, loss_weight=(1,1,1,1), reproj=None, target='vo'):
     
-    # # information matrix
-    # vo_motions_cpu = vo_motions.detach().cpu()
-    # vo_rot_norms = torch.norm(vo_motions_cpu.rotation().Log(), dim=1).numpy()
-    # vo_trans_norms = torch.norm(vo_motions_cpu.translation(), dim=1).numpy()
-    # imu_rot_norms = torch.norm(imu_drots.Log(), dim=1).numpy()
-    # imu_trans_norms = torch.norm(imu_dvels * dts.unsqueeze(-1), dim=1).numpy()
-
-    # vo_rot_covs, vo_trans_covs = kitti_vo_func(vo_rot_norms, vo_trans_norms)
-    # imu_rot_covs, imu_trans_covs = kitti_imu_func(imu_rot_norms, imu_trans_norms)
-    # imu_vel_covs = imu_trans_covs / dts.numpy()**2
-
-    # # cov
-    # vo_rot_infos = (1 / vo_rot_covs)
-    # vo_trans_infos = (1 / vo_trans_covs)
-    # imu_rot_infos = (1 / imu_rot_covs)
-    # imu_vel_infos = (1 / imu_vel_covs)
-    # transvel_infos = np.ones(len(init_nodes)-1)
-    # transvel_infos = imu_vel_infos
-
-    # # scov
-    # vo_rot_infos = (1 / vo_rot_covs) / np.mean(1 / vo_rot_covs) * loss_weight[0]**2
-    # vo_trans_infos = (1 / vo_trans_covs) / np.mean(1 / vo_trans_covs) * loss_weight[0]**2
-    # imu_rot_infos = (1 / imu_rot_covs) / np.mean(1 / imu_rot_covs) * loss_weight[2]**2
-    # imu_vel_infos = (1 / imu_vel_covs) / np.mean(1 / imu_vel_covs) * loss_weight[1]**2
-    # transvel_infos = np.ones(len(init_nodes)-1) * loss_weight[3]**2
-
-    # seye
     vo_rot_infos = np.ones(len(links)) * loss_weight[0]**2
     vo_trans_infos = np.ones(len(links)) * loss_weight[0]**2
     imu_rot_infos = np.ones(len(init_nodes)-1) * loss_weight[2]**2

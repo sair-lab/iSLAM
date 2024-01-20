@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from torch.nn.parallel import DistributedDataParallel
 
 import cv2
 import numpy as np
