@@ -9,19 +9,19 @@ We formulate a SLAM system as a **bi-level optimization** problem to make the fr
 
 <img src='docs/bilevel.png' width=500>
 
-This design significantly improves the generalization ability of the entire system and thus achieves the accuracy improvement up to 45%. To the best of our knowledge, iSLAM is the first SLAM system showing that the front-end and back-end can learn jointly and mutually contribute to each other in a self-supervised manner.
+This design significantly improves the generalization ability of the entire system and thus achieves an accuracy improvement of up to 45%. To the best of our knowledge, iSLAM is the first SLAM system showing that the front-end and back-end can learn jointly and mutually contribute to each other in a self-supervised manner.
 
 ## Related Papers
 
-**iSLAM: Imperative SLAM**, Taimeng Fu, Shaoshu Su, and Chen Wang, *arXiv preprint arXiv:2306.07894*, 2023. [PDF](https://arxiv.org/pdf/2306.07894.pdf).
+**iSLAM: Imperative SLAM**, Taimeng Fu, Shaoshu Su, Yiren Lu, and Chen Wang, *IEEE Robotics and Automation Letters (RA-L)*, 2024. [PDF](https://arxiv.org/pdf/2306.07894.pdf).
 
 Please cite us as:
 ```
-@article{fu2023islam,
-  title={iSLAM: Imperative SLAM},
-  author={Fu, Taimeng and Su, Shaoshu and Wang, Chen},
-  journal={arXiv preprint arXiv:2306.07894},
-  year={2023}
+@article{fu2024islam,
+  title = {{iSLAM}: Imperative {SLAM}},
+  author = {Fu, Taimeng and Su, Shaoshu and Lu, Yiren and Wang, Chen},
+  journal = {IEEE Robotics and Automation Letters (RA-L)},
+  year = {2024}
 }
 ```
 
@@ -79,11 +79,11 @@ Please download EuRoC [here](https://projects.asl.ethz.ch/datasets/doku.php?id=k
 
 ### Download Pretrain Model
 
-Please download the pretrain model [here](https://buffalo.box.com/s/r4urjlumi6b7k6bf75c3l7karqg2846c) and put it in `./models`.
+Please download the pre-trained model [here](https://buffalo.box.com/s/r4urjlumi6b7k6bf75c3l7karqg2846c) and put it in `./models`.
 
 ### Run Scripts
 
-We provide `run_kitti.sh` and `run_euroc.sh`. Please open and change `data_dir` to your path to a specific sequence. The results will in `./train_results/${project_name}/${train_name}` and the trained models will in `./train_results_models/${project_name}/${train_name}`, so you may also change these two variables to specify the output path.
+We provide `run_kitti.sh` and `run_euroc.sh`. Please open and change `data_dir` to your path to a specific sequence. The results will in `./train_results/${project_name}/${train_name}` and the trained models will be in `./train_results_models/${project_name}/${train_name}`, so you may also change these two variables to specify the output path.
 
 Finally, just run:
 
