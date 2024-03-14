@@ -165,36 +165,3 @@ class StereoNet7(nn.Module):
             loss_unc = torch.mean(torch.exp(-unc) * diff + unc * lamb)
             loss = torch.mean(diff)
             return  loss_unc/(1.0+lamb), loss
-
-if __name__ == '__main__':
-    
-    stereonet = StereoNet7()
-    stereonet.cuda()
-    # print (stereonet)
-    import numpy as np
-    import matplotlib.pyplot as plt
-    import time
-    np.set_printoptions(precision=4, threshold=100000)
-    x, y = np.ogrid[:512, :256]
-    # print (x, y, (x+y))
-    img = np.repeat((x + y)[..., np.newaxis], 3, 2) / float(512 + 384)
-    img = img.astype(np.float32)
-    print (img.dtype)
-    imgInput = img[np.newaxis,...].transpose(0, 3, 1, 2)
-    # imgInput = np.concatenate((imgInput,imgInput),axis=0)
-    imgInput = np.concatenate((imgInput,imgInput),axis=1)
-
-    starttime = time.time()
-    ftime, edtime = 0., 0.
-    for k in range(10):
-        imgTensor = torch.from_numpy(imgInput)
-        z,  tic, feattime, toc = stereonet(imgTensor.cuda() ,combinelr=False)
-        print (z.data.cpu().numpy().shape)
-        ftime += (feattime-tic)
-        edtime += (toc - feattime)
-    print (time.time() - starttime, ftime, edtime)
-    # print (z.data.numpy())
-
-    # for name,param in stereonet.named_parameters():
-    #   print (name,param.requires_grad)
-

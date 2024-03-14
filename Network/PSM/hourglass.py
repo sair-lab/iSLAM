@@ -105,29 +105,3 @@ class Hourglass2(nn.Module):
         low3 = self.low3(low2)
         up2  = self.up2(low3)
         return up1 + up2
-
-if __name__ == '__main__':
-    
-    stereonet = Hourglass(2, 64, increase=32)
-    stereonet
-    # print (stereonet)
-    import numpy as np
-    import matplotlib.pyplot as plt
-    np.set_printoptions(precision=4, threshold=100000)
-    imsize = 32
-    x, y = np.ogrid[:imsize, :imsize]
-    # print (x, y, (x+y))
-    img = np.repeat((x + y)[..., np.newaxis], 64, 2) / float(imsize + imsize)
-    img = img.astype(np.float32)
-    print (img.dtype)
-    imgInput = img[np.newaxis,...].transpose(0, 3, 1, 2)
-    imgInput = np.concatenate((imgInput,imgInput),axis=0)
-
-    imgTensor = torch.from_numpy(imgInput)
-    z = stereonet(imgTensor)
-    import ipdb;ipdb.set_trace()
-    print (z.data.cpu().numpy().shape)
-    # print (z.data.numpy())
-
-    for name,param in stereonet.named_parameters():
-      print (name,param.requires_grad)

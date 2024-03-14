@@ -1,18 +1,16 @@
 import pypose as pp
 import numpy as np
 import pandas
+import torch
 import yaml
 import cv2
-
-import torch
-from torch.utils.data import Dataset, DataLoader
-from torch.utils.data.distributed import DistributedSampler
-
 import os
-from os import listdir, makedirs
-from os.path import isdir, isfile
 
-from .transformation import pos_quats2SEs, pose2motion, SEs2ses, pose2motion_pypose, tartan2kitti_pypose, cvtSE3_pypose
+from os import listdir
+from os.path import isdir, isfile
+from torch.utils.data import Dataset
+
+from .transformation import pos_quats2SEs, pose2motion, SEs2ses
 from .utils import make_intrinsics_layer
 
 
@@ -65,7 +63,7 @@ def stereo_rectify(left_intrinsic, left_distortion, right_intrinsic, right_disto
 
 
 class TartanAirTrajFolderLoader:
-    def __init__(self, datadir, sample_step=1, start_frame=0, end_frame=-1):
+    def __init__(self, datadir):
 
         ############################## load images ######################################################################
         imgfolder = datadir + '/image_left'
@@ -139,7 +137,7 @@ class TartanAirTrajFolderLoader:
 
 
 class EuRoCTrajFolderLoader:
-    def __init__(self, datadir, sample_step=1, start_frame=0, end_frame=-1):
+    def __init__(self, datadir):
         all_timestamps = []
 
         ############################## load images ######################################################################
@@ -239,17 +237,9 @@ class EuRoCTrajFolderLoader:
         else:
             self.has_imu = False
 
-        # print("rgbfiles", self.rgbfiles[:10])
-        # print("rebfiles_right", self.rgbfiles_right[:10])
-        # print("intrinsic", self.intrinsic)
-        # print("intrinsic_right", self.intrinsic_right)
-        # print("rgb2imu_pose", self.rgb2imu_pose)
-        # print("rgb2imu_sync", self.rgb2imu_sync[:10])
-        # print("right2left_pose", self.right2left_pose, self.right2left_pose.Log())
-
 
 class KITTITrajFolderLoader:
-    def __init__(self, datadir, sample_step=1, start_frame=0, end_frame=-1):
+    def __init__(self, datadir):
         import pykitti
 
         datadir_split = datadir.split('/')
@@ -346,7 +336,7 @@ class KITTITrajFolderLoader:
             for line in f.readlines():
                 # NB: datetime only supports microseconds, but KITTI timestamps
                 # give nanoseconds, so need to truncate last 4 characters to
-                # get rid of \n (counts as 1) and extra 3 digits
+                # get rid of \n (counts as 1) and extra 3 digits.
                 t = dt.datetime.strptime(line[:-4], '%Y-%m-%d %H:%M:%S.%f')
                 timestamps.append(t.timestamp())
         timestamps.sort()

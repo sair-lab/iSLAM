@@ -58,17 +58,10 @@ class PoseVelGraph(nn.Module):
             reprojerr = self.reproj(motion)
             if len(reprojerr.shape) == 3:
                 reprojerr = reprojerr.view(-1, self.reproj.N*2)
-
             return pgerr, adjvelerr, imuroterr, transvelerr, reprojerr
+        
         else:
             return pgerr, adjvelerr, imuroterr, transvelerr
-        # return pgerr, adjvelerr, imuroterr, transvelerr
-        # return torch.cat([
-        #     1 * pgerr.view(-1),
-        #     0.1 * adjvelerr.view(-1),
-        #     10 * imuroterr.view(-1),
-        #     0.1 * transvelerr.view(-1)
-        # ])
 
 
     def vo_loss(self, edges, poses):

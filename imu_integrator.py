@@ -237,109 +237,112 @@ def optm_bias(lr, epoch, poses, sync, accels, gyros, accel_bias, gyro_bias, dts,
     return imu.accel_bias.detach(), imu.gyro_bias.detach(), poses_before, poses_after
 
 
-if __name__ == '__main__':
-    from Datasets.utils import ToTensor, Compose, CropCenter, DownscaleFlow, Normalize, SqueezeBatchDim
-    from Datasets.TrajFolderDataset import TrajFolderDataset
-
-    # data_root = '/data/euroc/MH_01_easy/mav0'
-    # data_root = '/data/kitti/2011_09_30/2011_09_30_drive_0018_sync'
-    data_root = '/data/tartanair_coord/soulcity/Easy/P000'
-    data_type = 'tartanair'
-    start_frame = 0
-    end_frame = -1
-
-    mean = [0.485, 0.456, 0.406]
-    std = [0.229, 0.224, 0.225]
-    transform = Compose([
-        CropCenter((448, 640), fix_ratio=True), 
-        DownscaleFlow(), 
-        Normalize(mean=mean, std=std, keep_old=True), 
-        ToTensor(),
-        SqueezeBatchDim()
-    ])
-    dataset = TrajFolderDataset(
-        datadir=data_root, datatype=data_type, transform=transform,
-        start_frame=start_frame, end_frame=end_frame
-    )
-
-    import numpy as np
-    dataset.accels = np.loadtxt(data_root+'/imu/acc.txt', dtype=np.float32)
-    dataset.accels = dataset.accels[dataset.rgb2imu_sync[0]:dataset.rgb2imu_sync[-1]+1]
-    dataset.gravity = float(-9.8)
-
-    accel_bias = torch.tensor(dataset.accel_bias)
-    gyro_bias = torch.tensor(dataset.gyro_bias)
-    # accel_bias = torch.zeros(3)
-    # gyro_bias = torch.zeros(3)
-    poses = pp.SE3(dataset.poses).cuda()
-
-    accel_bias, gyro_bias, poses_before, poses_after = optm_bias(
-        1e-5, 50, poses, dataset.rgb2imu_sync, dataset.accels, dataset.gyros,
-        accel_bias, gyro_bias, dataset.imu_dts, dataset.imu_init, dataset.gravity
-    )
-    poses_before = poses_before.detach().cpu().numpy()
-    poses_after = poses_after.detach().cpu().numpy()
-
-    print(dataset.poses[0], dataset.vels[0])
-
-    print(accel_bias)
-    print(gyro_bias)
-
-    import matplotlib.pyplot as plt
-
-    def plot3d(ax, poses, col):
-        poses = pp.SE3(poses)
-
-        p = poses.translation().numpy()
-        ax.plot(p[:, 0], p[:, 1], p[:, 2], c=col, linewidth=3)
-
-        axis_scale = 0
-        for i in range(0, len(poses), 10):
-            x = poses[i] @ (torch.tensor([1, 0, 0], dtype=torch.float32) * axis_scale)
-            y = poses[i] @ (torch.tensor([0, 1, 0], dtype=torch.float32) * axis_scale)
-            z = poses[i] @ (torch.tensor([0, 0, 1], dtype=torch.float32) * axis_scale)
-
-            ax.plot([p[i,0], x[0]], [p[i,1], x[1]], [p[i,2], x[2]], c='r')
-            ax.plot([p[i,0], y[0]], [p[i,1], y[1]], [p[i,2], y[2]], c='g')
-            ax.plot([p[i,0], z[0]], [p[i,1], z[1]], [p[i,2], z[2]], c='b')
-
-    ax = plt.figure().add_subplot(projection='3d')
-    plot3d(ax, dataset.poses, 'g')
-    plot3d(ax, poses_before, 'r')
-    plot3d(ax, poses_after, 'b')
-    plt.show()
-
-
-
 # if __name__ == '__main__':
 #     from Datasets.utils import ToTensor, Compose, CropCenter, DownscaleFlow, Normalize, SqueezeBatchDim
 #     from Datasets.TrajFolderDataset import TrajFolderDataset
 
-#     # data_root = '/projects/academic/cwx/kitti_raw/2011_09_30/2011_09_30_drive_0033_sync'
-#     # data_root = '/home/data2/kitti_raw/2011_09_30/2011_09_30_drive_0033_sync'
-#     data_root = '/home/data2/euroc_raw/MH_01_easy/mav0'
-#     data_type = 'euroc'
-#     start_frame = 0
-#     end_frame = -1
-#     trainroot = './train_results/test_imudenoise'
-#     vo_model_name = './models/stereo_cvt_tartanvo_1914.pkl'
-#     batch_size = 8
+#     def run(data_name):
+#         # data_root = '/data/euroc/MH_01_easy/mav0'
+#         # data_root = '/data/kitti/2011_09_30/2011_09_30_drive_0018_sync'
+#         # data_root = '/data/tartanair_coord/soulcity/Easy/P000'
+#         data_root = '/data/tartanair/' + data_name.replace('_', '/')
+#         data_type = 'tartanair'
+#         imu_denoise_model_name = 'models/1022_tartanair_all_len80_10_1_0_direct_supervise_epoch_210_train_loss_0.001068338142439274.pth'
+#         start_frame = 0
+#         end_frame = -1
 
-#     mean = [0.485, 0.456, 0.406]
-#     std = [0.229, 0.224, 0.225]
-#     transform = Compose([
-#         CropCenter((448, 640), fix_ratio=True), 
-#         DownscaleFlow(), 
-#         Normalize(mean=mean, std=std, keep_old=True), 
-#         ToTensor(),
-#         SqueezeBatchDim()
-#     ])
-#     dataset = TrajFolderDataset(
-#         datadir=data_root, datatype=data_type, transform=transform,
-#         start_frame=start_frame, end_frame=end_frame
-#     )
+#         mean = [0.485, 0.456, 0.406]
+#         std = [0.229, 0.224, 0.225]
+#         transform = Compose([
+#             CropCenter((448, 640), fix_ratio=True), 
+#             DownscaleFlow(), 
+#             Normalize(mean=mean, std=std, keep_old=True), 
+#             ToTensor(),
+#             SqueezeBatchDim()
+#         ])
+#         dataset = TrajFolderDataset(
+#             datadir=data_root, datatype=data_type, transform=transform,
+#             start_frame=start_frame, end_frame=end_frame
+#         )
 
-#     imu_module = IMUModule(dataset.accels, dataset.gyros, dataset.imu_dts, dataset.imu_init, 
-#                            dataset.gravity, dataset.rgb2imu_sync, use_denoiser=True)
-    
-#     imu_module.integrate(0, 1, dataset.imu_init, motion_mode=False)
+#         imu_module = IMUModule(
+#             dataset.accels, dataset.gyros, dataset.imu_dts,
+#             dataset.accel_bias, dataset.gyro_bias,
+#             dataset.imu_init, dataset.gravity, dataset.rgb2imu_sync, 
+#             device='cuda', denoise_model_name=imu_denoise_model_name,
+#             denoise_accel=True, denoise_gyro=(dataset.datatype!='kitti')
+#         )
+
+#         import numpy as np
+#         acc_noises = torch.tensor(np.loadtxt(data_root+'/imu/acc_noise.txt')).cuda()
+#         gyro_noises = torch.tensor(np.loadtxt(data_root+'/imu/gyro_noise.txt')).cuda()
+
+#         acc_noise_est = []
+#         gyro_noise_est = []
+#         for i in range(0, len(dataset)-8, 8):
+#             imu_batch_st = imu_module.rgb2imu_sync[i]
+#             imu_batch_end = imu_batch_st + 80
+
+#             gyros = imu_module.gyros[imu_batch_st:imu_batch_end].clone()
+#             accels = imu_module.accels[imu_batch_st:imu_batch_end].clone()
+#             gt_accels = accels - acc_noises[imu_batch_st:imu_batch_end]
+#             gt_gyros = gyros - gyro_noises[imu_batch_st:imu_batch_end]
+
+#             data = {'acc':accels, 'gyro':gyros}
+#             denoised_accels, denoised_gyros, acc_cov, gyro_cov = imu_module.denoiser(data, eval=True)
+
+#             acc_noise_est.extend(denoised_accels - gt_accels)
+#             gyro_noise_est.extend(denoised_gyros - gt_gyros)
+
+#         acc_noise_est = torch.stack(acc_noise_est)
+#         gyro_noise_est = torch.stack(gyro_noise_est)
+
+#         acc_est_bias = torch.mean(torch.abs(acc_noise_est), dim=0) / torch.mean(torch.abs(imu_module.accels), dim=0)
+#         gyro_est_bias = torch.mean(torch.abs(gyro_noise_est), dim=0) / torch.mean(torch.abs(imu_module.gyros), dim=0)
+
+#         acc_est_stdiv = torch.std(torch.abs(acc_noise_est), dim=0) / torch.mean(torch.abs(imu_module.accels), dim=0)
+#         gyro_est_stdiv = torch.std(torch.abs(gyro_noise_est), dim=0) / torch.mean(torch.abs(imu_module.gyros), dim=0)
+
+#         # print(acc_est_bias, torch.mean(acc_est_bias))
+#         # print(gyro_est_bias, torch.mean(gyro_est_bias))
+
+#         return (torch.mean(acc_est_bias).item(), torch.mean(gyro_est_bias).item(),
+#                 torch.mean(acc_est_stdiv).item(), torch.mean(gyro_est_stdiv).item())
+
+#     sequences = [
+#         'ocean_Hard_P000', 
+#         'ocean_Hard_P001', 
+#         'ocean_Hard_P002', 
+#         'ocean_Hard_P003', 
+#         'ocean_Hard_P004', 
+#         'ocean_Hard_P005', 
+#         'ocean_Hard_P006', 
+#         'ocean_Hard_P007', 
+#         'ocean_Hard_P008', 
+#         'ocean_Hard_P009', 
+#         'soulcity_Hard_P000', 
+#         'soulcity_Hard_P001', 
+#         'soulcity_Hard_P002', 
+#         'soulcity_Hard_P003', 
+#         'soulcity_Hard_P004', 
+#         'soulcity_Hard_P005', 
+#         'soulcity_Hard_P008', 
+#         'soulcity_Hard_P009'
+#     ]
+
+#     avg_a = 0
+#     avg_g = 0
+#     avg_ac = 0
+#     avg_gc = 0
+#     for name in sequences:
+#         a, g, ac, gc = run(name)
+#         avg_a += a
+#         avg_g += g
+#         avg_ac += ac
+#         avg_gc += gc
+#     avg_a /= len(sequences)
+#     avg_g /= len(sequences)
+#     avg_ac /= len(sequences)
+#     avg_gc /= len(sequences)
+#     print(avg_a, avg_g)
+#     print(avg_ac, avg_gc)
