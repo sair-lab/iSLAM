@@ -2,11 +2,15 @@
 
 iSLAM is a novel self-supervised imperative learning framework for SLAM tasks. It fosters reciprocal correction between the front-end and back-end, thus enhancing performance without necessitating any external supervision. 
 
+<figure>
 <img src='docs/iSLAM anim.gif' width=500>
+</figure>
 
 We formulate the SLAM problem as a **bi-level optimization** in which the front-end and back-end are bidirectionally connected. As a result, the front-end model can learn global geometric knowledge obtained through pose graph optimization by back-propagating the residuals from the back-end component. This framework is named "imperative" SLAM to emphasize the passive nature of this learning process
 
+<figure>
 <img src='docs/bilevel.png' width=500>
+</figure>
 
 Our framework significantly improves the system's trajectory prediction accuracy and generalization ability, achieving an accuracy improvement of 22% on average over a baseline model. To the best of our knowledge, iSLAM is the first SLAM system showing that the front-end and back-end can mutually correct each other in a self-supervised manner.
 
@@ -29,12 +33,16 @@ Please cite us as:
 We test our framework on [KITTI](https://www.cvlibs.net/datasets/kitti/), [EuRoC](https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets) and [TartanAir](https://theairlab.org/tartanair-dataset/) benchmarks, which have distinctive motion patterns and environment features. 
 It is seen that after several iterations, the ATE of the front-end VO and IMU models reduced by 22% and 4% on average, respectively. Meanwhile, the accuracy of the PVGO back-end also improves by about 10%.
 
+<figure>
 <img src='docs/error_decrease.png' height=250>
 <img src='docs/error_percentage.png' height=250>
+</figure>
 
 The figure below visually demonstrates the improvement in trajectory estimation of the VO model through imperative learning.
 
+<figure>
 <img src='docs/trajectory.png' width=1000>
+</figure>
 
 ## More Info
 
