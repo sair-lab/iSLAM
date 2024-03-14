@@ -1,15 +1,14 @@
 import pypose as pp
 import numpy as np
 import pandas
+import torch
 import yaml
 import cv2
+import os
 
-import torch
-from torch.utils.data import Dataset, DataLoader
-from torch.utils.data.distributed import DistributedSampler
-
-from os import listdir, path
+from os import listdir
 from os.path import isdir, isfile
+from torch.utils.data import Dataset
 
 from .transformation import pos_quats2SEs, pose2motion, SEs2ses
 from .utils import make_intrinsics_layer
@@ -64,14 +63,15 @@ def stereo_rectify(left_intrinsic, left_distortion, right_intrinsic, right_disto
 
 
 class TartanAirTrajFolderLoader:
-    def __init__(self, datadir, sample_step=1, start_frame=0, end_frame=-1):
+    def __init__(self, datadir):
 
         ############################## load images ######################################################################
         imgfolder = datadir + '/image_left'
         files = listdir(imgfolder)
         self.rgbfiles = [(imgfolder +'/'+ ff) for ff in files if (ff.endswith('.png') or ff.endswith('.jpg'))]
         self.rgbfiles.sort()
-        self.rgb_dts = np.ones(len(self.rgbfiles)-1, dtype=np.float32) * 0.1
+        self.rgb_dts = np.ones(len(self.rgbfiles), dtype=np.float32) * 0.1
+        self.rgb_ts = np.array([i for i in range(len(self.rgbfiles))], dtype=np.float64) * 0.1
 
         ############################## load stereo right images ######################################################################
         if isdir(datadir + '/image_right'):
@@ -114,42 +114,30 @@ class TartanAirTrajFolderLoader:
 
         ############################## load imu data ######################################################################
         if isdir(datadir + '/imu'):
+            self.imu_dts = np.ones(len(self.rgbfiles)*10, dtype=np.float32) * 0.01
+            self.imu_ts = np.array([i for i in range(len(self.rgbfiles)*10)], dtype=np.float64) * 0.01
+            self.rgb2imu_sync = np.array([i for i in range(len(self.rgbfiles))]) * 10
+            self.rgb2imu_pose = pp.SE3([0, 0, 0,   0, 0, 0, 1]).to(dtype=torch.float32)
+            self.gravity = 0
+
             imudir = datadir + '/imu'
             # acceleration in the body frame
-            accels = np.load(imudir + '/accel_left.npy')
+            self.accels = np.load(imudir + '/acc_nograv_body.npy')
             # angular rate in the body frame
-            gyros = np.load(imudir + '/gyro_left.npy')
+            self.gyros = np.load(imudir + '/gyro.npy')
             # velocity in the world frame
-            vels = np.load(imudir + '/vel_left.npy')
-            # # accel w/o gravity in body frame
-            # accels_nograv = np.load(path.join(imudir, "accel_nograv_body.npy")).astype(np.float32)
-            
-            # self.accel_bias = -1.0 * np.array([0.01317811, 0.00902851, -0.00521479])
-            accel_bias = -1.0 * np.array([-0.02437125, -0.00459115, -0.00392401])
-            gyro_bias = -1.0 * np.array([0, 0, 0])
-            self.accels = accels - accel_bias
-            self.gyros = gyros - gyro_bias
+            self.vels = np.load(imudir + '/vel_global.npy')
 
-            # imu_fps = 100
-            self.imu_dts = np.ones(len(accels)-1, dtype=np.float32) * 0.01
-            
-            # img_fps = 10
-            self.rgb2imu_sync = np.arange(0, len(self.rgbfiles)) * 10
-
-            self.rgb2imu_pose = pp.SE3([0, 0, 0,   0, 0, 0, 1]).to(dtype=torch.float32)
-
-            self.gravity = -9.81
+            with open(imudir + '/parameter.yaml', 'r') as file:
+                paras = yaml.safe_load(file)
+            self.accel_bias = np.array(paras['acc_zero_bias'], dtype=np.float32)
+            self.gyro_bias = np.array(paras['gyro_zero_bias'], dtype=np.float32)
 
             self.has_imu = True
-            self.vels = vels
-
-        else:
-            self.has_imu = False
-            self.vels = None
 
 
 class EuRoCTrajFolderLoader:
-    def __init__(self, datadir, sample_step=1, start_frame=0, end_frame=-1):
+    def __init__(self, datadir):
         all_timestamps = []
 
         ############################## load images ######################################################################
@@ -188,7 +176,7 @@ class EuRoCTrajFolderLoader:
             self.require_undistort = True
             img = cv2.imread(self.rgbfiles_right[0])
             h, w = img.shape[:2]
-            self.intrinsic, self.intrinsic_right, self.right2left_pose, self.imgmap, self.imgmap_right = stereo_rectify(
+            self.intrinsic, self.intrinsic_right, self.right2left_pose, self.imgmap, self.imgmap_right=stereo_rectify(
                 self.intrinsic, distortion, self.intrinsic_right, distortion_right, w, h, self.right2left_pose)
         else:
             self.require_undistort = False
@@ -214,6 +202,7 @@ class EuRoCTrajFolderLoader:
         timestamps = np.array(list(timestamps))
         timestamps.sort()
         self.rgb_dts = np.diff(timestamps).astype(np.float32) * 1e-3
+        self.rgb_ts = np.array(timestamps).astype(np.float64) * 1e-3
 
         ############################## load imu data ######################################################################
         if isfile(datadir + '/imu0/data.csv'):
@@ -223,12 +212,15 @@ class EuRoCTrajFolderLoader:
             gyros = df.values[:, 1:4].astype(np.float32)
 
             imu2pose_sync = sync_data(timestamps_pose, timestamps_imu)
-            self.accels = accels - accel_bias[imu2pose_sync]
-            self.gyros = gyros - gyro_bias[imu2pose_sync]
-            # self.accels = accels
-            # self.gyros = gyros
+            # self.accels = accels - accel_bias[imu2pose_sync]
+            # self.gyros = gyros - gyro_bias[imu2pose_sync]
+            self.accels = accels
+            self.gyros = gyros
+            self.accel_bias = np.mean(accel_bias[imu2pose_sync], axis=0)
+            self.gyro_bias = np.mean(gyro_bias[imu2pose_sync], axis=0)
 
             self.imu_dts = np.diff(timestamps_imu).astype(np.float32) * 1e-3
+            self.imu_ts = np.array(timestamps_imu).astype(np.float64) * 1e-3
             
             self.rgb2imu_sync = sync_data(timestamps_imu, timestamps)
 
@@ -245,17 +237,9 @@ class EuRoCTrajFolderLoader:
         else:
             self.has_imu = False
 
-        # print("rgbfiles", self.rgbfiles[:10])
-        # print("rebfiles_right", self.rgbfiles_right[:10])
-        # print("intrinsic", self.intrinsic)
-        # print("intrinsic_right", self.intrinsic_right)
-        # print("rgb2imu_pose", self.rgb2imu_pose)
-        # print("rgb2imu_sync", self.rgb2imu_sync[:10])
-        # print("right2left_pose", self.right2left_pose, self.right2left_pose.Log())
-
 
 class KITTITrajFolderLoader:
-    def __init__(self, datadir, sample_step=1, start_frame=0, end_frame=-1):
+    def __init__(self, datadir):
         import pykitti
 
         datadir_split = datadir.split('/')
@@ -292,6 +276,7 @@ class KITTITrajFolderLoader:
         ############################## load images ######################################################################
         self.rgbfiles = dataset.cam2_files
         self.rgb_dts = np.diff(ts_rgb).astype(np.float32)
+        self.rgb_ts = np.array(ts_rgb).astype(np.float64) - ts_rgb[0]
 
         ############################## load stereo right images ######################################################################
         self.rgbfiles_right = dataset.cam3_files
@@ -322,12 +307,14 @@ class KITTITrajFolderLoader:
         self.vels = self.vels.numpy()
 
         ############################## load imu data ######################################################################
-        # self.accels = np.array([[oxts_frame.packet.af, oxts_frame.packet.al, oxts_frame.packet.au] for oxts_frame in dataset.oxts])
-        # self.gyros = np.array([[oxts_frame.packet.wf, oxts_frame.packet.wl, oxts_frame.packet.wu] for oxts_frame in dataset.oxts])
-        self.accels = np.array([[oxts_frame.packet.ax, oxts_frame.packet.ay, oxts_frame.packet.az] for oxts_frame in dataset.oxts])
-        self.gyros = np.array([[oxts_frame.packet.wx, oxts_frame.packet.wy, oxts_frame.packet.wz] for oxts_frame in dataset.oxts])
+        self.accels = np.array([[oxts_frame.packet.ax, oxts_frame.packet.ay, oxts_frame.packet.az] for oxts_frame in dataset.oxts]).astype(np.float32)
+        self.gyros = np.array([[oxts_frame.packet.wx, oxts_frame.packet.wy, oxts_frame.packet.wz] for oxts_frame in dataset.oxts]).astype(np.float32)
+
+        self.accel_bias = np.zeros(3, dtype=np.float32)
+        self.gyro_bias = np.zeros(3, dtype=np.float32)
 
         self.imu_dts = np.diff(ts_imu).astype(np.float32)
+        self.imu_ts = np.array(ts_imu).astype(np.float64) - ts_imu[0]
 
         T_IL = np.linalg.inv(T_LI)
         self.rgb2imu_pose = pp.from_matrix(torch.tensor(T_IL), ltype=pp.SE3_type).to(dtype=torch.float32)
@@ -340,7 +327,7 @@ class KITTITrajFolderLoader:
         import datetime as dt
 
         """Load timestamps from file."""
-        timestamp_file = path.join(
+        timestamp_file = os.path.join(
             datapath, subfolder, 'timestamps.txt')
 
         # Read and parse the timestamps
@@ -349,7 +336,7 @@ class KITTITrajFolderLoader:
             for line in f.readlines():
                 # NB: datetime only supports microseconds, but KITTI timestamps
                 # give nanoseconds, so need to truncate last 4 characters to
-                # get rid of \n (counts as 1) and extra 3 digits
+                # get rid of \n (counts as 1) and extra 3 digits.
                 t = dt.datetime.strptime(line[:-4], '%Y-%m-%d %H:%M:%S.%f')
                 timestamps.append(t.timestamp())
         timestamps.sort()
@@ -357,7 +344,7 @@ class KITTITrajFolderLoader:
         return timestamps
 
 
-class TrajFolderDataset(Dataset):
+class TrajFolderDatasetBase(Dataset):
     def __init__(self, datadir, datatype, transform=None, start_frame=0, end_frame=-1, loader=None):
         if loader is None:
             if datatype == 'tartanair':
@@ -370,10 +357,16 @@ class TrajFolderDataset(Dataset):
         if end_frame <= 0:
             end_frame += len(loader.rgbfiles)
 
+        self.datadir = datadir
         self.datatype = datatype
+        self.transform = transform
+        self.start_frame = start_frame
+        self.end_frame = end_frame
+        self.loader = loader
         
         self.rgbfiles = loader.rgbfiles[start_frame:end_frame]
         self.rgb_dts = loader.rgb_dts[start_frame:end_frame-1]
+        self.rgb_ts = loader.rgb_ts[start_frame:end_frame]
         self.num_img = len(self.rgbfiles)
 
         try:
@@ -414,10 +407,14 @@ class TrajFolderDataset(Dataset):
             self.accels = loader.accels[start_imu:end_imu]
             self.gyros = loader.gyros[start_imu:end_imu]
             self.imu_dts = loader.imu_dts[start_imu:end_imu-1]
+            self.imu_ts = loader.imu_ts[start_imu:end_imu]
             
             self.rgb2imu_pose = loader.rgb2imu_pose
             self.imu_init = {'rot':self.poses[0, 3:], 'pos':self.poses[0, :3], 'vel':self.vels[0]}
             self.gravity = loader.gravity
+
+            self.accel_bias = loader.accel_bias
+            self.gyro_bias = loader.gyro_bias
 
             self.imu_motions = None
             self.has_imu = True
@@ -435,17 +432,29 @@ class TrajFolderDataset(Dataset):
         else:
             self.require_undistort = False
 
-        self.transform = transform
-
         self.links = None
         self.num_link = 0
 
         del loader
 
-    def imu_pose2motion(self, imu_poses):
-        SEs = pos_quats2SEs(imu_poses)
-        matrix = pose2motion(SEs, links=self.links)
-        self.imu_motions = SEs2ses(matrix).astype(np.float32)
+
+class TrajFolderDataset(TrajFolderDatasetBase):
+    def __init__(self, datadir, datatype, transform=None, start_frame=0, end_frame=-1, loader=None, links=None):
+        super(TrajFolderDataset, self).__init__(datadir, datatype, transform, start_frame, end_frame, loader)
+
+        if links is None:
+            self.links = [[i, i+1] for i in range(self.num_img-1)]
+        else:
+            self.links = links
+        self.num_link = len(self.links)
+
+        self.motions = self.calc_motions_by_links(self.links)
+
+    def __getitem__(self, idx):
+        return self.get_pair(self.links[idx][0], self.links[idx][1])
+    
+    def __len__(self):
+        return self.num_link
 
     def calc_motions_by_links(self, links):
         if self.poses is None:
@@ -455,7 +464,7 @@ class TrajFolderDataset(Dataset):
         matrix = pose2motion(SEs, links=links)
         motions = SEs2ses(matrix).astype(np.float32)
         return motions
-
+    
     def undistort(self, img, is_right=False):
         if not self.require_undistort:
             return img
@@ -463,80 +472,23 @@ class TrajFolderDataset(Dataset):
         dst = cv2.remap(img, imgmap[0], imgmap[1], cv2.INTER_AREA)
         return dst
 
-    def __len__(self):
-        return self.num_link
-
-
-class TrajFolderDatasetPVGO(TrajFolderDataset):
-    def __init__(self, datadir, datatype, transform=None, start_frame=0, end_frame=-1, loader=None,
-                    use_loop_closure=False, use_stop_constraint=False, batch_size=None):
-
-        super(TrajFolderDatasetPVGO, self).__init__(datadir, datatype, transform, start_frame, end_frame, loader)
-
-        ############################## generate links ######################################################################
-        self.links = []
-        # # [loop closure] gt pose
-        # if use_loop_closure and self.poses is not None:
-        #     loop_min_interval = 100
-        #     trans_th = np.average([np.linalg.norm(self.poses[i+1, :3] - self.poses[i, :3]) for i in range(len(self.poses)-1)]) * 5
-        #     self.links.extend(gt_pose_loop_detector(self.poses, loop_min_interval, trans_th, 5))
-        # # [loop closure] bag of word (to do)
-        # self.links = bow_orb_loop_detector(self.rgbfiles, loop_min_interval)
-        # # [loop closure] adjancent
-        # loop_range = 2
-        # loop_interval = 1
-        # self.links.extend(adj_loop_detector(self.num_img, loop_range, loop_interval))
-        if batch_size == None:
-            self.links = [[i, i+1] for i in range(self.num_img-1)]
-        else:
-            for current_idx in range(0, self.num_img-batch_size-1, batch_size):
-                for i in range(current_idx, current_idx+batch_size):
-                    self.links.append([i, i+1])
-                for i in range(current_idx, current_idx+batch_size-1):
-                    self.links.append([i, i+2])
-
-
-        self.num_link = len(self.links)
-
-        ############################## calc motions ######################################################################
-        self.motions = self.calc_motions_by_links(self.links)
-
-        ############################## pick stop frames ######################################################################
-        self.stop_frames = []
-        if use_stop_constraint and self.vels_world is not None:
-            self.stop_frames = gt_vel_stop_detector(self.vels_world[::imu_mul], 0.02)
-
-    def __getitem__(self, idx):
+    def get_pair(self, i, j):
         res = {}
 
-        img0 = cv2.imread(self.rgbfiles[self.links[idx][0]], cv2.IMREAD_COLOR)
-        img1 = cv2.imread(self.rgbfiles[self.links[idx][1]], cv2.IMREAD_COLOR)
+        img0 = cv2.imread(self.rgbfiles[i], cv2.IMREAD_COLOR)
+        img1 = cv2.imread(self.rgbfiles[j], cv2.IMREAD_COLOR)
         img0 = self.undistort(img0)
         img1 = self.undistort(img1)
-        # cv2.imwrite('temp/{}_img0.png'.format(idx), img0)
-        # cv2.imwrite('temp/{}_img1.png'.format(idx), img1)
         res['img0'] = [img0]
         res['img1'] = [img1]
-        res['path_img0'] = self.rgbfiles[self.links[idx][0]]
-        res['path_img1'] = self.rgbfiles[self.links[idx][1]]
 
         if self.rgbfiles_right is not None:
-            img0_r = cv2.imread(self.rgbfiles_right[self.links[idx][0]], cv2.IMREAD_COLOR)
+            img0_r = cv2.imread(self.rgbfiles_right[i], cv2.IMREAD_COLOR)
+            img1_r = cv2.imread(self.rgbfiles_right[j], cv2.IMREAD_COLOR)
             img0_r = self.undistort(img0_r, True)
-            # cv2.imwrite('temp/{}_img0_r.png'.format(idx), img0_r)
+            img1_r = self.undistort(img1_r, True)
             res['img0_r'] = [img0_r]
-            res['path_img0_r'] = self.rgbfiles_right[self.links[idx][0]]
-            # res['blxfx'] = np.array([self.focalx * self.baseline], dtype=np.float32) # used for convert disp to depth
-            
-        if self.flowfiles is not None:
-            flow = np.load(self.flowfiles[self.links[idx][0]])
-            res['flow'] = [flow]
-            res['path_flow'] = self.flowfiles[self.links[idx][0]]
-
-        if self.depthfiles is not None:
-            depth = np.load(self.depthfiles[self.links[idx][0]])
-            res['depth0'] = [depth]
-            res['path_depth0'] = self.depthfiles[self.links[idx][0]]
+            res['img1_r'] = [img1_r]
 
         h, w, _ = img0.shape
         intrinsicLayer = make_intrinsics_layer(w, h, self.intrinsic[0], self.intrinsic[1], self.intrinsic[2], self.intrinsic[3])
@@ -544,20 +496,24 @@ class TrajFolderDatasetPVGO(TrajFolderDataset):
 
         res['intrinsic_calib'] = self.intrinsic.copy()
 
-        res['link'] = np.array(self.links[idx])
-
         if self.transform:
             res = self.transform(res)
 
-        if self.motions is not None:
-            res['motion'] = self.motions[idx]
+        res['link'] = np.array([i, j])
 
-        if self.has_imu and self.imu_motions is not None:
-            res['imu_motion'] = self.imu_motions[idx]
-
-        if self.right2left_pose != None:
-            res['extrinsic'] = self.right2left_pose.Log().numpy()
+        res['dt'] = np.sum(self.rgb_dts[min(i, j):max(i, j)])
 
         res['datatype'] = self.datatype
 
+        res['motion'] = (pp.SE3(self.poses[i]).Inv() @ pp.SE3(self.poses[j])).numpy()
+
+        if self.right2left_pose != None:
+            res['extrinsic'] = self.right2left_pose.clone().numpy()
+
+        res['img0_file'] = self.rgbfiles[i]
+        res['img1_file'] = self.rgbfiles[j]
+        res['img0_r_file'] = self.rgbfiles_right[i]
+        res['img1_r_file'] = self.rgbfiles_right[j]
+
         return res
+    

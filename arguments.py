@@ -9,6 +9,10 @@ def get_args():
                         help='data loader worker number (default: 1)')
     parser.add_argument('--vo-model-name', default='',
                         help='name of pretrained vo model (default: "")')
+    parser.add_argument('--pose-model-name', default='',
+                        help='name of pretrained pose model (vonet.pkl) (default: "")')
+    parser.add_argument('--imu-denoise-model-name', default='',
+                        help='name of pretrained imu denoise model (default: "")')
     parser.add_argument('--data-root', default='',
                         help='data root dir (default: "")')
     parser.add_argument('--start-frame', type=int, default=0,
@@ -47,6 +51,22 @@ def get_args():
                         help='portion to bp loss (default: "False")')
     parser.add_argument('--use-gt-scale', action='store_true', default=False,
                         help='use gt scale to correct trans scale (default: "False")')
+    parser.add_argument('--enable-mapping', action='store_true', default=False,
+                        help='enable mapping, generate point cloud (default: "False")')
+    parser.add_argument('--start-epoch', type=int, default=1,
+                        help='start epoch (default: 1)')
+    parser.add_argument('--vo-reverse-edge', action='store_true', default=False,
+                        help='use vo reverse edge in pvgo (default: False)')
+    parser.add_argument('--vo-right-cam', action='store_true', default=False,
+                        help='use right camera vo in pvgo (default: False)')
+    parser.add_argument('--reproj-points', type=int, default=0,
+                        help='number of points used in reprojection error (default: 0)')
+    parser.add_argument('--imu-lr', type=float, default=1e-5,
+                        help='imu bias learning rate (default: "1e-5")')
+    parser.add_argument('--imu-epoch', type=int, default=50,
+                        help='epoch of imu bias optm (default: "50")')
+    parser.add_argument('--use-est-cov', action='store_true', default=False,
+                        help='whether to use the covariance output by imu module (default: "False")')
 
     args = parser.parse_args()
     args.loss_weight = eval(args.loss_weight)   # string to tuple

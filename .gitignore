@@ -1,7 +1,9 @@
 models/
 train_*/
 test_*/
-temp_*/
+temp*/
+slurm_*/
+logs/
 
 __pycache__/
 

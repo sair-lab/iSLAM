@@ -1,15 +1,14 @@
 # iSLAM: Imperative SLAM
 
-iSLAM is a novel learning framework for SLAM tasks, which fosters reciprocal correction between the front-end and back-end, thus enhancing performance without necessitating any external supervision. 
+iSLAM is a novel self-supervised imperative learning framework for SLAM tasks. It fosters reciprocal correction between the front-end and back-end, thus enhancing performance without necessitating any external supervision. 
 
 <img src='docs/iSLAM anim.gif' width=500>
 
-We formulate a SLAM system as a **bi-level optimization** problem to make the front-back-ends bidirectionally connected. As a result, the front-end model is able to learn global geometric knowledge obtained through pose graph optimization by back-propagating the residuals from the back-end. We call this **imperative learning** due to the passive nature of this process.
-
+We formulate the SLAM problem as a **bi-level optimization** in which the front-end and back-end are bidirectionally connected. As a result, the front-end model can learn global geometric knowledge obtained through pose graph optimization by back-propagating the residuals from the back-end component. This framework is named "imperative" SLAM to emphasize the passive nature of this learning process
 
 <img src='docs/bilevel.png' width=500>
 
-This design significantly improves the generalization ability of the entire system and thus achieves an accuracy improvement of up to 45%. To the best of our knowledge, iSLAM is the first SLAM system showing that the front-end and back-end can learn jointly and mutually contribute to each other in a self-supervised manner.
+Our framework significantly improves the system's trajectory prediction accuracy and generalization ability, achieving an accuracy improvement of 22% on average over a baseline model. To the best of our knowledge, iSLAM is the first SLAM system showing that the front-end and back-end can mutually correct each other in a self-supervised manner.
 
 ## Related Papers
 
@@ -27,11 +26,12 @@ Please cite us as:
 
 ## Experiment Results
 
-We test our framework on [KITTI](https://www.cvlibs.net/datasets/kitti/) and [EuRoC](https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets) benchmarks, which have distinctive motion patterns. It is seen that after 6 iterations, both the front-end and back-end improve themselves significantly. Note that this is a self-learning process and no ground truth labels are used.
+We test our framework on [KITTI](https://www.cvlibs.net/datasets/kitti/), [EuRoC](https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets) and [TartanAir](https://theairlab.org/tartanair-dataset/) benchmarks, which have distinctive motion patterns and environment features. 
+It is seen that after several iterations, the ATE of the front-end VO and IMU models reduced by 22% and 4% on average, respectively. Meanwhile, the accuracy of the PVGO back-end also improves by about 10%.
 
-<img src='docs/improve.png' width=500>
+<img src='docs/decrease.png' width=500>
 
-The figure below visualizes the improvements VO trajectories through imperative learning.
+The figure below visually demonstrates the improvement in trajectory estimation of the VO model through imperative learning.
 
 <img src='docs/trajectory.png' width=800>
 
@@ -55,7 +55,7 @@ conda env create -f environment.yml
 
 #### KITTI
 
-We tested our framework on KITTI Odometry. However, as KITTI Odometry does not contain IMU data, we downloaded [KITTI Raw](https://www.cvlibs.net/datasets/kitti/raw_data.php) instead. The mapping between the two is:
+We test our framework on the trajectories in KITTI Odometry. However, as KITTI Odometry does not contain IMU data, we downloaded [KITTI Raw](https://www.cvlibs.net/datasets/kitti/raw_data.php) instead. The mapping between the two is:
 
 ```
 00: 2011_10_03_drive_0027 000000 004540
@@ -71,27 +71,37 @@ We tested our framework on KITTI Odometry. However, as KITTI Odometry does not c
 10: 2011_09_30_drive_0034 000000 001200
 ```
 
-We use synchronized images and raw IMU data (as the synchronized IMU is only 10Hz, while the raw is 100Hz). So you need to download both and replace the `oxts` folder in the synchronized data with the one in the raw data. You can use `./tools/replace_imu.py` to do the replacement.
+We use the synchronized images and raw IMU data (as the synchronized IMU is only 10Hz, while the raw IMU is 100Hz). So you need to download both and replace the `oxts` folder in the synchronized data with the one in the raw data. We prepared a script at `./tools/replace_imu.py` to facilitate the replacement.
 
 #### EuRoC
 
 Please download EuRoC [here](https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets).
 
+#### TartanAir
+
+We test on the Hard sequences of Ocean and Soulcity enviroments in TartanAir. Please download them [here](https://theairlab.org/tartanair-dataset/).
+
 ### Download Pretrain Model
 
-Please download the pre-trained model [here](https://buffalo.box.com/s/r4urjlumi6b7k6bf75c3l7karqg2846c) and put it in `./models`.
+Please download the pre-trained models [here](https://buffalo.box.com/s/iki2viq18qjbtlis2s2jwh15refl5c41) and put it in `./models`.
 
 ### Run Scripts
 
-We provide `run_kitti.sh` and `run_euroc.sh`. Please open and change `data_dir` to your path to a specific sequence. The results will in `./train_results/${project_name}/${train_name}` and the trained models will be in `./train_results_models/${project_name}/${train_name}`, so you may also change these two variables to specify the output path.
+We provide scripts `run_kitti.sh`, `run_euroc.sh`, and `run_tartanair.sh`. Please open and change `data_dir` to the path of a specific sequence on your computer. The trajectory estimation results will be stored in `./train_results/${project_name}/${train_name}` while the trained models will be saved to `./train_results_models/${project_name}/${train_name}`, so you may also change these variables to specify the output path.
 
-Finally, just run:
+After getting everything ready, just run:
 
 ```
 sh run_kitti.sh
 sh run_euroc.sh
+sh run_tartanair.sh
 ```
 
 ## Acknowledgements
 
-This work was partially supported by Cisco Systems, Inc.
+This work was in part supported by the ONR award
+N00014-24-1-2003. Any opinions, findings, conclusions, or
+recommendations expressed in this paper are those of the
+authors and do not necessarily reflect the views of the ONR.
+The authors also wish to express their gratitude for the
+generous gift funding provided by Cisco Systems Inc.

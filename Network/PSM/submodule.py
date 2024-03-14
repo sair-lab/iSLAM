@@ -153,32 +153,3 @@ class feature_extraction(nn.Module):
         output_feature = self.lastconv(output_feature)
 
         return output_feature
-
-
-if __name__ == '__main__':
-    
-    stereonet = feature_extraction(bigger=True)
-    # stereonet.cuda()
-    # print stereonet
-    import numpy as np
-    import matplotlib.pyplot as plt
-    np.set_printoptions(precision=4, threshold=100000)
-    imsize = 320
-    x, y = np.ogrid[:imsize, :imsize]
-    # print x, y, (x+y)
-    img = np.repeat((x + y)[..., np.newaxis], 3, 2) / float(imsize + imsize)
-    img = img.astype(np.float32)
-    print(img.dtype)
-    imgInput = img[np.newaxis,...].transpose(0, 3, 1, 2)
-    imgInput = np.concatenate((imgInput,imgInput),axis=0)
-
-    imgTensor = torch.from_numpy(imgInput)
-    z = stereonet(imgTensor)
-    import ipdb;ipdb.set_trace()
-    print(z.data.cpu().numpy().shape)
-    # print z.data.numpy()
-
-    # for name,param in stereonet.named_parameters():
-    #   print name,param.requires_grad
-
-
