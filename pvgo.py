@@ -187,6 +187,8 @@ def run_pvgo(init_nodes, init_vels, vo_motions, links, dts, imu_drots, imu_dtran
         trans_loss, rot_loss = graph.vo_loss(edges, vo_motions)
     elif target == 'imu':
         trans_loss, rot_loss = graph.imu_loss(imu_drots_grad, imu_dvels_grad)
+    else:
+        trans_loss = rot_loss = None, None
 
     # for test
     # trans_loss, rot_loss = graph.vo_loss_unroll(edges, data.poses_withgrad)
