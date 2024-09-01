@@ -4,7 +4,7 @@ iSLAM is a novel self-supervised imperative learning framework for SLAM tasks. I
 
 <img src='docs/iSLAM anim.gif' width=500>
 
-We formulate the SLAM problem as a **bi-level optimization** in which the front-end and back-end are bidirectionally connected. As a result, the front-end model can learn global geometric knowledge obtained through pose graph optimization by back-propagating the residuals from the back-end component. This framework is named "imperative" SLAM to emphasize the passive nature of this learning process
+We formulate the SLAM problem as a **bi-level optimization** in which the front-end and back-end are bidirectionally connected. As a result, the front-end model can learn global geometric knowledge obtained through pose graph optimization by back-propagating the residuals from the back-end component. This framework is named "imperative" SLAM to emphasize the passive nature of this learning process.
 
 <img src='docs/bilevel.png' width=500>
 
@@ -79,7 +79,7 @@ Please download EuRoC [here](https://projects.asl.ethz.ch/datasets/doku.php?id=k
 
 #### TartanAir
 
-We test on the Hard sequences of Ocean and Soulcity enviroments in TartanAir. Please download them [here](https://theairlab.org/tartanair-dataset/).
+We test on the Hard sequences of Ocean and Soulcity enviroments in TartanAir. Please download them [here](https://theairlab.org/tartanair-dataset/). The IMU data can be found [here](https://buffalo.box.com/s/sjesyq6ogievmlv1rsydnjst83qhrscy).
 
 ### Download Pretrain Model
 
