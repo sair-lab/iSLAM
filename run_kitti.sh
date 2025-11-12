@@ -7,7 +7,7 @@ rot_w=1
 trans_w=0.1
 batch_size=8
 lr=3e-6
-epoch=31
+epoch=40
 start_epoch=1
 
 project_name=test_kitti
